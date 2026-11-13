@@ -17,7 +17,7 @@ enum ExerciseLibrary {
         cues: ["Hands on the wall at shoulder height.",
                "Keep your body in a straight line.",
                "Bend your elbows to bring your chest to the wall, then push away."],
-        easier: "Stand closer to the wall.")
+        easier: "Stand closer to the wall.", formCheck: .pushUp)
     static let heelRaise = Exercise("heel-raise", "Supported Heel Raises", symbol: "figure.stand",
         cues: ["Hold the back of a chair or the counter.",
                "Rise up onto your toes.",
@@ -27,7 +27,7 @@ enum ExerciseLibrary {
         cues: ["Stand next to a counter with a hand ready.",
                "Lift one foot a little off the floor.",
                "Switch legs halfway through."],
-        easier: "Keep one hand lightly on the counter the whole time.")
+        easier: "Keep one hand lightly on the counter the whole time.", formCheck: .balance)
     static let bandRow = Exercise("band-row", "Band or Towel Row", symbol: "figure.rower",
         cues: ["Hold a resistance band or a towel looped around a door handle.",
                "Pull your elbows back and squeeze your shoulder blades.",
@@ -111,7 +111,7 @@ enum ExerciseLibrary {
         cues: ["Step forward and lower your back knee towards the floor.",
                "Keep your front knee over your foot.",
                "Hold a sandbag or backpack to add weight."],
-        easier: "Do static lunges holding a chair.")
+        easier: "Do static lunges holding a chair.", formCheck: .lunge)
     static let wallBall = Exercise("wall-ball", "Wall Ball", symbol: "basketball",
         cues: ["Hold a medicine ball (or nothing) at your chest.",
                "Squat below parallel.",

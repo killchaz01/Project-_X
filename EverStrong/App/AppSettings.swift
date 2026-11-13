@@ -4,6 +4,7 @@ import SwiftUI
 enum AppSettings {
     static let largeText = "settings.largeText"
     static let spokenCoaching = "settings.spokenCoaching"
+    static let weeklyGoal = "settings.weeklyGoal"
 }
 
 extension View {

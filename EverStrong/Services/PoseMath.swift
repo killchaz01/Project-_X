@@ -23,62 +23,150 @@ enum PoseMath {
     }
 }
 
-/// Counts squat reps from a stream of knee angles and gives simple, kind feedback.
-struct SquatAnalyzer {
-    enum Phase { case standing, descending }
+/// Counts reps from a stream of joint angles and gives simple, kind feedback.
+/// Works for any bend-and-straighten movement: squats and lunges (knee angle), push-ups (elbow angle).
+struct RepAnalyzer {
+    enum Phase { case extended, moving }
 
     struct Feedback: Equatable {
         let message: String
         let isPositive: Bool
     }
 
-    /// Knee angle above which we consider the person standing.
+    /// Joint angle above which we consider the limb straight (standing tall / arms extended).
     var standingAngle: Double = 155
-    /// Knee angle that must be reached for a movement to count as a rep.
+    /// Joint angle that must be reached for a movement to count as a rep.
     var repThreshold: Double = 125
-    /// Below this the squat is "good depth" (around thighs parallel).
+    /// Below this the rep has "good depth" (for squats, around thighs parallel).
     var goodDepthAngle: Double = 100
-    /// Torso lean beyond this triggers a "chest up" cue.
+    /// Posture measure (e.g. torso lean) beyond which a posture cue is given.
     var maxLean: Double = 50
 
-    private(set) var phase: Phase = .standing
+    var shallowMessage = "Try going a little lower, only as far as feels comfortable."
+    var leanMessage = "Keep your chest a bit more upright."
+    var goodMessage = "Great depth!"
+    var okMessage = "Nice and controlled."
+
+    private(set) var phase: Phase = .extended
     private(set) var reps = 0
     private(set) var deepestAngle: Double = 180
     private var maxLeanThisRep: Double = 0
 
+    static var squat: RepAnalyzer { RepAnalyzer() }
+
+    static var lunge: RepAnalyzer {
+        var a = RepAnalyzer()
+        a.goodDepthAngle = 105
+        a.maxLean = 35
+        a.shallowMessage = "Lower your back knee a little more, if it feels comfortable."
+        a.leanMessage = "Stay tall through your body."
+        return a
+    }
+
+    static var pushUp: RepAnalyzer {
+        var a = RepAnalyzer()
+        a.standingAngle = 150
+        a.repThreshold = 120
+        a.goodDepthAngle = 95
+        a.maxLean = 25
+        a.shallowMessage = "Bend your elbows a little more."
+        a.leanMessage = "Keep your body in one straight line."
+        a.goodMessage = "Full range!"
+        return a
+    }
+
     mutating func reset() {
-        phase = .standing
+        phase = .extended
         reps = 0
         deepestAngle = 180
         maxLeanThisRep = 0
     }
 
-    /// Feed one frame. Returns feedback when a rep finishes.
+    /// Feed one frame. `kneeAngle` is the working joint's angle; `torsoLean` the posture measure.
+    /// Returns feedback when a rep finishes.
     mutating func update(kneeAngle: Double, torsoLean: Double? = nil) -> Feedback? {
         switch phase {
-        case .standing:
+        case .extended:
             if kneeAngle < standingAngle - 15 {
-                phase = .descending
+                phase = .moving
                 deepestAngle = kneeAngle
                 maxLeanThisRep = torsoLean ?? 0
             }
             return nil
-        case .descending:
+        case .moving:
             deepestAngle = min(deepestAngle, kneeAngle)
             if let torsoLean { maxLeanThisRep = max(maxLeanThisRep, torsoLean) }
             guard kneeAngle >= standingAngle else { return nil }
-            phase = .standing
+            phase = .extended
             guard deepestAngle <= repThreshold else {
-                return Feedback(message: "Try going a little lower, only as far as feels comfortable.", isPositive: false)
+                return Feedback(message: shallowMessage, isPositive: false)
             }
             reps += 1
             if maxLeanThisRep > maxLean {
-                return Feedback(message: "Rep \(reps). Keep your chest a bit more upright.", isPositive: false)
+                return Feedback(message: "Rep \(reps). \(leanMessage)", isPositive: false)
             }
             if deepestAngle <= goodDepthAngle {
-                return Feedback(message: "Rep \(reps). Great depth!", isPositive: true)
+                return Feedback(message: "Rep \(reps). \(goodMessage)", isPositive: true)
             }
-            return Feedback(message: "Rep \(reps). Nice and controlled.", isPositive: true)
+            return Feedback(message: "Rep \(reps). \(okMessage)", isPositive: true)
         }
+    }
+}
+
+typealias SquatAnalyzer = RepAnalyzer
+
+/// Times how long one foot stays off the floor during a single-leg balance.
+struct BalanceAnalyzer {
+    /// One ankle must be higher than the other by this fraction of leg length to count as lifted.
+    var liftThreshold: Double = 0.08
+    /// Brief tracking drop-outs shorter than this don't end the hold.
+    var graceSeconds: TimeInterval = 0.6
+
+    private(set) var currentHold = 0
+    private(set) var best = 0
+    private var holdStart: TimeInterval?
+    private var lastLifted: TimeInterval = 0
+    private var lastMilestone = 0
+
+    static func isFootLifted(leftAnkle: CGPoint, rightAnkle: CGPoint, legLength: Double, threshold: Double = 0.08) -> Bool {
+        guard legLength > 0 else { return false }
+        return abs(Double(leftAnkle.y - rightAnkle.y)) / legLength > threshold
+    }
+
+    mutating func reset() { self = BalanceAnalyzer(liftThreshold: liftThreshold, graceSeconds: graceSeconds) }
+
+    init(liftThreshold: Double = 0.08, graceSeconds: TimeInterval = 0.6) {
+        self.liftThreshold = liftThreshold
+        self.graceSeconds = graceSeconds
+    }
+
+    /// Feed one frame with the current time in seconds.
+    mutating func update(lifted: Bool, time: TimeInterval) -> RepAnalyzer.Feedback? {
+        if lifted {
+            lastLifted = time
+            if holdStart == nil {
+                holdStart = time
+                lastMilestone = 0
+            }
+        }
+        guard let start = holdStart else { return nil }
+
+        if lifted || time - lastLifted < graceSeconds {
+            currentHold = Int(time - start)
+            best = max(best, currentHold)
+            let milestone = currentHold / 10
+            if milestone > lastMilestone {
+                lastMilestone = milestone
+                return RepAnalyzer.Feedback(message: "\(milestone * 10) seconds. Keep going!", isPositive: true)
+            }
+            return nil
+        }
+
+        // Foot is back down.
+        let held = Int(lastLifted - start)
+        holdStart = nil
+        currentHold = 0
+        guard held >= 2 else { return nil }
+        return RepAnalyzer.Feedback(message: "You held for \(held) seconds. Switch legs and try again.", isPositive: true)
     }
 }

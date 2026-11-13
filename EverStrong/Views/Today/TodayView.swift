@@ -11,6 +11,8 @@ struct TodayView: View {
     @Query(sort: \FamilyContact.sortOrder) private var family: [FamilyContact]
     @Query(sort: \WorkoutLog.date, order: .reverse) private var logs: [WorkoutLog]
 
+    @AppStorage(AppSettings.weeklyGoal) private var weeklyGoal = 3
+
     @State private var showingCheckIn = false
     @State private var showingSettings = false
     @State private var playing: Workout?
@@ -26,6 +28,7 @@ struct TodayView: View {
                     checkInCard
                     medicineCard
                     workoutCard
+                    progressCard
                     if !family.isEmpty { quickCallCard }
                 }
                 .padding(20)
@@ -139,6 +142,29 @@ struct TodayView: View {
                     .font(.callout).foregroundStyle(.secondary)
             }
         }
+    }
+
+    // MARK: Progress
+
+    private var progressCard: some View {
+        let active = ProgressStats.activeDaysThisWeek(activeDates: logs.map(\.date))
+        let streak = ProgressStats.streak(activeDates: logs.map(\.date))
+        return NavigationLink {
+            ProgressScreen()
+        } label: {
+            Card {
+                HStack {
+                    Label("This week", systemImage: "chart.bar.fill").font(.title2.bold())
+                    Spacer()
+                    Image(systemName: "chevron.right").font(.headline).foregroundStyle(.secondary)
+                }
+                WeekStrip(activeDays: active)
+                Text("\(active.count) of \(weeklyGoal) active days" + (streak > 1 ? " · \(streak)-day streak" : ""))
+                    .font(.title3)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("Opens your progress")
     }
 
     // MARK: Family

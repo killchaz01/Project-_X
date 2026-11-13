@@ -97,10 +97,20 @@ struct ContactEditor: View {
     @State private var photoData: Data?
     @State private var photoItem: PhotosPickerItem?
     @State private var confirmDelete = false
+    @State private var pickingContact = false
 
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    Button { pickingContact = true } label: {
+                        Label("Choose from my Contacts", systemImage: "person.crop.circle.badge.plus")
+                            .font(.title3.bold())
+                            .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+                    }
+                } footer: {
+                    Text("Fills in their name, number and photo for you. Or type the details below.")
+                }
                 Section {
                     HStack {
                         Spacer()
@@ -144,6 +154,13 @@ struct ContactEditor: View {
                     dismiss()
                 }
             }
+            .background(
+                ContactPickerPresenter(isPresented: $pickingContact) { picked in
+                    name = picked.name
+                    phone = picked.phone
+                    if let data = picked.imageData { photoData = Self.downscaled(data) }
+                }
+            )
             .onAppear(perform: load)
             .onChange(of: photoItem) { _, item in
                 Task {

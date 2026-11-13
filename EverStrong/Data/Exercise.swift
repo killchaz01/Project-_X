@@ -4,7 +4,52 @@ import Foundation
 enum FormCheckKind: String, Hashable, CaseIterable, Identifiable {
     /// Any squatting pattern: bodyweight squat, chair sit-to-stand, wall-ball squat.
     case squat
+    case lunge
+    /// Wall or floor push-ups, seen from the side.
+    case pushUp
+    /// Standing on one leg: times how long the foot stays off the floor.
+    case balance
+
     var id: String { rawValue }
+
+    /// What the big number on screen counts.
+    var countLabel: String { self == .balance ? "sec best" : "reps" }
+
+    var startHint: String {
+        switch self {
+        case .squat, .lunge: "Stand side-on to the camera so your whole body is in view."
+        case .pushUp: "Turn side-on to the camera so it can see your shoulder, elbow and wrist."
+        case .balance: "Face the camera, hold on to something steady, then lift one foot."
+        }
+    }
+
+    var notVisibleHint: String {
+        switch self {
+        case .pushUp: "Move so your shoulder, elbow and wrist are all on screen."
+        default: "Step back until your head, hips, knees and feet are all on screen."
+        }
+    }
+
+    /// (SF Symbol, instruction) pairs shown before starting.
+    var setupSteps: [(symbol: String, text: String)] {
+        switch self {
+        case .squat, .lunge:
+            [("iphone", "Lean your phone upright against something steady, at about hip height."),
+             ("arrow.left.and.right", "Stand 2 to 3 metres (6 to 10 feet) away, side-on to the phone."),
+             ("person.fill.viewfinder", "Make sure your head and feet are both on screen."),
+             ("chair", "Clear the space around you and keep a chair nearby.")]
+        case .pushUp:
+            [("iphone", "Lean your phone upright against something steady, at about chest height."),
+             ("arrow.left.and.right", "Stand 2 to 3 metres (6 to 10 feet) away, side-on, facing a wall."),
+             ("person.fill.viewfinder", "Make sure the phone can see your arm from shoulder to wrist."),
+             ("hand.raised", "For floor push-ups, put the phone low down instead.")]
+        case .balance:
+            [("iphone", "Lean your phone upright against something steady, at about hip height."),
+             ("arrow.up.and.down", "Stand 2 to 3 metres (6 to 10 feet) away, facing the phone."),
+             ("person.fill.viewfinder", "Make sure both feet are on screen."),
+             ("hand.raised", "Stand next to a counter or sturdy chair you can hold.")]
+        }
+    }
 }
 
 struct Exercise: Identifiable, Hashable {

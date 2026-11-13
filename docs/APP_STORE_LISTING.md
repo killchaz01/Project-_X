@@ -24,10 +24,13 @@ WORKOUTS MADE FOR YOU
 • Spoken coaching, a large countdown, and an easier option for every exercise
 
 AI FORM CHECK
-Prop up your iPhone and squat. EverStrong counts your reps and gives friendly tips on depth and posture. It all happens on your phone, and video is never recorded.
+Prop up your iPhone and move. EverStrong counts your squats, lunges and push-ups, times your balance holds, and gives friendly tips on depth and posture. It all happens on your phone, and video is never recorded.
 
 MEDICINE REMINDERS
 Add your medicines and times. Get a reminder, then tap one big button to mark it taken.
+
+SEE YOUR PROGRESS
+A simple weekly view of your active days, streaks and medicines taken.
 
 FAMILY, ONE TAP AWAY
 Add photos of the people you call most. Tap a face to call.

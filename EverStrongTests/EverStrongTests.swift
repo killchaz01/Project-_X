@@ -105,3 +105,129 @@ final class ContentTests: XCTestCase {
         XCTAssertEqual(PhoneNumber.dialable("07700 900+123"), "07700900123")
     }
 }
+
+final class RepAnalyzerPresetTests: XCTestCase {
+    func testPushUpCountsElbowBend() {
+        var a = RepAnalyzer.pushUp
+        let fb = [170, 130, 90, 130, 165].compactMap { a.update(kneeAngle: $0, torsoLean: 5) }
+        XCTAssertEqual(a.reps, 1)
+        XCTAssertTrue(fb[0].message.contains("Full range"))
+    }
+
+    func testPushUpSagWarning() {
+        var a = RepAnalyzer.pushUp
+        let fb = [170, 100, 165].compactMap { a.update(kneeAngle: $0, torsoLean: 40) }
+        XCTAssertTrue(fb[0].message.contains("straight line"))
+    }
+
+    func testLungeShallowMessage() {
+        var a = RepAnalyzer.lunge
+        let fb = [175, 135, 170].compactMap { a.update(kneeAngle: $0) }
+        XCTAssertEqual(a.reps, 0)
+        XCTAssertTrue(fb[0].message.contains("back knee"))
+    }
+}
+
+final class BalanceAnalyzerTests: XCTestCase {
+    func testFootLiftDetection() {
+        let l = CGPoint(x: 0.4, y: 0.80), r = CGPoint(x: 0.6, y: 0.90)
+        XCTAssertTrue(BalanceAnalyzer.isFootLifted(leftAnkle: l, rightAnkle: r, legLength: 0.4))
+        XCTAssertFalse(BalanceAnalyzer.isFootLifted(leftAnkle: l, rightAnkle: CGPoint(x: 0.6, y: 0.81), legLength: 0.4))
+        XCTAssertFalse(BalanceAnalyzer.isFootLifted(leftAnkle: l, rightAnkle: r, legLength: 0))
+    }
+
+    func testHoldTimingAndMilestone() {
+        var b = BalanceAnalyzer()
+        var messages: [String] = []
+        // Foot up from t=0 to t=12 (sampled 10x per second), then down.
+        for i in 0...120 {
+            if let fb = b.update(lifted: true, time: Double(i) / 10) { messages.append(fb.message) }
+        }
+        XCTAssertEqual(b.currentHold, 12)
+        XCTAssertEqual(messages, ["10 seconds. Keep going!"])
+        for i in 121...140 {
+            if let fb = b.update(lifted: false, time: Double(i) / 10) { messages.append(fb.message) }
+        }
+        XCTAssertEqual(b.best, 12)
+        XCTAssertEqual(b.currentHold, 0)
+        XCTAssertEqual(messages.last, "You held for 12 seconds. Switch legs and try again.")
+    }
+
+    func testBriefDropoutDoesNotEndHold() {
+        var b = BalanceAnalyzer()
+        _ = b.update(lifted: true, time: 0)
+        _ = b.update(lifted: true, time: 3)
+        XCTAssertNil(b.update(lifted: false, time: 3.3))   // within grace period
+        _ = b.update(lifted: true, time: 5)
+        XCTAssertEqual(b.currentHold, 5)
+    }
+}
+
+final class ProgressStatsTests: XCTestCase {
+    private var cal: Calendar = {
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = TimeZone(identifier: "UTC")!
+        c.firstWeekday = 2   // Monday
+        return c
+    }()
+
+    private func day(_ d: Int, hour: Int = 12) -> Date {
+        cal.date(from: DateComponents(year: 2026, month: 11, day: d, hour: hour))!
+    }
+
+    func testStreakCountsBackFromToday() {
+        XCTAssertEqual(ProgressStats.streak(activeDates: [day(11), day(12), day(13)], today: day(13), calendar: cal), 3)
+    }
+
+    func testStreakSurvivesUntilEndOfToday() {
+        XCTAssertEqual(ProgressStats.streak(activeDates: [day(11), day(12)], today: day(13), calendar: cal), 2)
+    }
+
+    func testStreakBrokenByGap() {
+        XCTAssertEqual(ProgressStats.streak(activeDates: [day(9), day(10)], today: day(13), calendar: cal), 0)
+        XCTAssertEqual(ProgressStats.streak(activeDates: [day(9), day(10), day(13)], today: day(13), calendar: cal), 1)
+    }
+
+    func testWeekDaysStartOnMonday() {
+        // 13 Nov 2026 is a Friday; that week runs Mon 9 – Sun 15.
+        let week = ProgressStats.weekDays(containing: day(13), calendar: cal)
+        XCTAssertEqual(week.count, 7)
+        XCTAssertEqual(cal.component(.day, from: week[0]), 9)
+        XCTAssertEqual(cal.component(.day, from: week[6]), 15)
+    }
+
+    func testActiveDaysThisWeekIgnoresOtherWeeks() {
+        let active = ProgressStats.activeDaysThisWeek(activeDates: [day(6), day(9), day(9, hour: 18), day(12)],
+                                                      today: day(13), calendar: cal)
+        XCTAssertEqual(active.count, 2)
+    }
+
+    func testAdherence() {
+        // One medicine twice a day (8:00 and 20:00), created 3 days ago. "Now" is noon on the 13th,
+        // so expected = 2 + 2 + 2 (10th–12th) + 1 (8:00 today) = 7. Five taken.
+        let med = ProgressStats.MedicationSummary(
+            createdAt: day(10, hour: 6), minutesOfDay: [480, 1200],
+            takenDates: [day(10, hour: 8), day(10, hour: 20), day(11, hour: 8), day(12, hour: 8), day(13, hour: 8)])
+        let result = ProgressStats.adherence([med], now: day(13), calendar: cal)
+        XCTAssertEqual(result ?? -1, 5.0 / 7.0, accuracy: 0.0001)
+    }
+
+    func testAdherenceNilWithoutMedicines() {
+        XCTAssertNil(ProgressStats.adherence([], now: day(13), calendar: cal))
+    }
+}
+
+final class ContactImportTests: XCTestCase {
+    func testPrefersMobileNumber() {
+        let numbers: [(label: String?, number: String)] = [
+            (label: "_$!<Home>!$_", number: "020 7946 0000"),
+            (label: "_$!<Mobile>!$_", number: "07700 900123")
+        ]
+        XCTAssertEqual(PickedContact.preferredNumber(numbers), "07700 900123")
+    }
+
+    func testFallsBackToFirstNumber() {
+        XCTAssertEqual(PickedContact.preferredNumber([(label: nil, number: "555 0100")]), "555 0100")
+        XCTAssertEqual(PickedContact.preferredNumber([]), "")
+    }
+}

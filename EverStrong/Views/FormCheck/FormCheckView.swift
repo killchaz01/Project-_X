@@ -9,7 +9,7 @@ struct FormCheckView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    Text("Your iPhone watches your movement and gives you tips as you go, out loud and on screen.")
+                    Text("Your iPhone watches your movement, counts for you and gives you tips as you go, out loud and on screen.")
                         .font(.title3)
 
                     Text("Choose an exercise").font(.title2.bold())
@@ -31,10 +31,9 @@ struct FormCheckView: View {
 
                     Card {
                         Text("How to set up").font(.title3.bold())
-                        Label("Lean your phone upright against something steady, at about hip height.", systemImage: "iphone")
-                        Label("Stand 2 to 3 metres (6 to 10 feet) away, side-on to the phone.", systemImage: "arrow.left.and.right")
-                        Label("Make sure your head and feet are both on screen.", systemImage: "person.fill.viewfinder")
-                        Label("Clear the space around you and keep a chair nearby.", systemImage: "chair")
+                        ForEach(exercise.formCheck?.setupSteps ?? [], id: \.text) { step in
+                            Label(step.text, systemImage: step.symbol)
+                        }
                     }
                     .font(.body)
 
@@ -66,7 +65,7 @@ struct LiveFormCheckView: View {
             default: cameraView
             }
         }
-        .task { await model.start() }
+        .task { await model.start(kind: exercise.formCheck ?? .squat) }
         .onDisappear { model.stop() }
     }
 
@@ -78,17 +77,17 @@ struct LiveFormCheckView: View {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading) {
                         Text(exercise.name).font(.title2.bold())
-                        if let angle = model.kneeAngle {
-                            Text("Knee angle \(Int(angle))°").font(.headline).monospacedDigit()
+                        if let metric = model.metricText {
+                            Text(metric).font(.headline).monospacedDigit()
                         }
                     }
                     Spacer()
                     VStack {
-                        Text("\(model.reps)").font(.system(size: 64, weight: .heavy, design: .rounded)).monospacedDigit()
-                        Text("reps").font(.headline)
+                        Text("\(model.count)").font(.system(size: 64, weight: .heavy, design: .rounded)).monospacedDigit()
+                        Text(model.countLabel).font(.headline)
                     }
                     .accessibilityElement(children: .combine)
-                    .accessibilityLabel("\(model.reps) reps")
+                    .accessibilityLabel("\(model.count) \(model.countLabel)")
                 }
                 .padding(20)
                 .foregroundStyle(.white)

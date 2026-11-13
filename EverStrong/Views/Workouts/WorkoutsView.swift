@@ -86,16 +86,13 @@ struct WorkoutDetailView: View {
 
 struct ExerciseCard: View {
     let exercise: Exercise
+    @State private var checkingForm = false
     var body: some View {
         Card {
             HStack {
                 Image(systemName: exercise.symbol).font(.title).foregroundStyle(Color.accentColor).frame(width: 44)
                 Text(exercise.name).font(.title3.bold())
                 Spacer()
-                if exercise.formCheck != nil {
-                    Image(systemName: "camera.viewfinder").foregroundStyle(.secondary)
-                        .accessibilityLabel("Form check available")
-                }
             }
             ForEach(Array(exercise.cues.enumerated()), id: \.offset) { index, cue in
                 Text("\(index + 1). \(cue)").font(.body)
@@ -103,6 +100,14 @@ struct ExerciseCard: View {
             if let easier = exercise.easier {
                 Label("Easier: \(easier)", systemImage: "tortoise.fill").font(.callout).foregroundStyle(.secondary)
             }
+            if exercise.formCheck != nil {
+                Button { checkingForm = true } label: {
+                    Label("Check my form", systemImage: "camera.viewfinder").font(.headline)
+                        .frame(maxWidth: .infinity, minHeight: 48)
+                }
+                .buttonStyle(.bordered)
+            }
         }
+        .fullScreenCover(isPresented: $checkingForm) { LiveFormCheckView(exercise: exercise) }
     }
 }

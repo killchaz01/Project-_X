@@ -23,23 +23,42 @@ struct PoseFrame {
 @Observable
 final class FormCheckModel {
     enum Status: Equatable { case idle, needsPermission, running, unavailable }
+    private typealias Joints = [VNHumanBodyPoseObservation.JointName: CGPoint]
 
     var status: Status = .idle
     var pose = PoseFrame()
-    var reps = 0
-    var kneeAngle: Double?
-    var message = "Stand side-on to the camera so your whole body is in view."
+    /// Reps, or best balance hold in seconds.
+    var count = 0
+    var countLabel = "reps"
+    /// A small live read-out, e.g. "Knee angle 95°".
+    var metricText: String?
+    var message = ""
     var messageIsPositive = true
     var bodyVisible = false
 
     let session = AVCaptureSession()
     private let processor = PoseProcessor()
-    @ObservationIgnored private var analyzer = SquatAnalyzer()
+    @ObservationIgnored private var kind: FormCheckKind = .squat
+    @ObservationIgnored private var reps = RepAnalyzer()
+    @ObservationIgnored private var balance = BalanceAnalyzer()
     @ObservationIgnored private var configured = false
     @ObservationIgnored private var lastSpoken = Date.distantPast
     @ObservationIgnored private var lastVisibleWarning = Date.distantPast
 
-    func start() async {
+    func start(kind: FormCheckKind) async {
+        self.kind = kind
+        countLabel = kind.countLabel
+        message = kind.startHint
+        messageIsPositive = true
+        count = 0
+        metricText = nil
+        switch kind {
+        case .squat: reps = .squat
+        case .lunge: reps = .lunge
+        case .pushUp: reps = .pushUp
+        case .balance: balance.reset()
+        }
+
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized: break
         case .notDetermined:
@@ -52,15 +71,13 @@ final class FormCheckModel {
             guard configure() else { status = .unavailable; return }
             configured = true
         }
-        analyzer.reset()
-        reps = 0
         processor.onFrame = { [weak self] frame in
             Task { @MainActor in self?.handle(frame) }
         }
         let session = self.session
         await Task.detached { session.startRunning() }.value
         status = .running
-        SpeechCoach.shared.say("Form check started. Stand side on so I can see your whole body.", interrupt: true)
+        SpeechCoach.shared.say("Form check started. \(kind.startHint)", interrupt: true)
     }
 
     func stop() {
@@ -96,24 +113,61 @@ final class FormCheckModel {
         return true
     }
 
+    // MARK: Per-frame analysis
+
     private func handle(_ frame: PoseFrame) {
         pose = frame
-        guard let side = Self.bestSide(frame) else {
-            bodyVisible = false
-            kneeAngle = nil
+        let j = frame.joints
+        var feedback: RepAnalyzer.Feedback?
+        let visible: Bool
+
+        switch kind {
+        case .squat:
+            if let leg = Self.leg(j, left: true) ?? Self.leg(j, left: false) {
+                visible = true
+                metricText = "Knee angle \(Int(leg.kneeAngle))°"
+                feedback = reps.update(kneeAngle: leg.kneeAngle, torsoLean: Self.torsoLean(j))
+                count = reps.reps
+            } else { visible = false }
+        case .lunge:
+            // Use whichever knee is bent more: that is the working leg.
+            let legs = [Self.leg(j, left: true), Self.leg(j, left: false)].compactMap { $0 }
+            if let angle = legs.map(\.kneeAngle).min() {
+                visible = true
+                metricText = "Knee angle \(Int(angle))°"
+                feedback = reps.update(kneeAngle: angle, torsoLean: Self.torsoLean(j))
+                count = reps.reps
+            } else { visible = false }
+        case .pushUp:
+            if let arm = Self.arm(j, left: true) ?? Self.arm(j, left: false) {
+                visible = true
+                metricText = "Elbow angle \(Int(arm.elbowAngle))°"
+                feedback = reps.update(kneeAngle: arm.elbowAngle, torsoLean: arm.bodySag)
+                count = reps.reps
+            } else { visible = false }
+        case .balance:
+            if let l = Self.leg(j, left: true), let r = Self.leg(j, left: false) {
+                visible = true
+                let lifted = BalanceAnalyzer.isFootLifted(leftAnkle: l.ankle, rightAnkle: r.ankle,
+                                                          legLength: max(l.length, r.length),
+                                                          threshold: balance.liftThreshold)
+                feedback = balance.update(lifted: lifted, time: Date.now.timeIntervalSinceReferenceDate)
+                count = balance.best
+                metricText = balance.currentHold > 0 ? "Holding \(balance.currentHold) s" : "Lift one foot"
+            } else { visible = false }
+        }
+
+        bodyVisible = visible
+        guard visible else {
+            metricText = nil
             if Date.now.timeIntervalSince(lastVisibleWarning) > 6 {
                 lastVisibleWarning = .now
-                message = "Step back until your head, hips, knees and feet are all on screen."
+                message = kind.notVisibleHint
                 messageIsPositive = false
             }
             return
         }
-        bodyVisible = true
-        let angle = PoseMath.angle(side.hip, side.knee, side.ankle)
-        kneeAngle = angle
-        let lean = side.shoulder.map { PoseMath.leanFromVertical(hip: side.hip, shoulder: $0) }
-        if let feedback = analyzer.update(kneeAngle: angle, torsoLean: lean) {
-            reps = analyzer.reps
+        if let feedback {
             message = feedback.message
             messageIsPositive = feedback.isPositive
             if Date.now.timeIntervalSince(lastSpoken) > 1.2 {
@@ -123,23 +177,46 @@ final class FormCheckModel {
         }
     }
 
-    private struct Side { let shoulder: CGPoint?; let hip: CGPoint; let knee: CGPoint; let ankle: CGPoint }
-
-    /// Use whichever leg the camera can see best.
-    private static func bestSide(_ frame: PoseFrame) -> Side? {
-        let j = frame.joints
-        let left = zip3(j[.leftHip], j[.leftKnee], j[.leftAnkle]).map {
-            Side(shoulder: j[.leftShoulder], hip: $0.0, knee: $0.1, ankle: $0.2)
+    private struct Leg {
+        let hip: CGPoint, knee: CGPoint, ankle: CGPoint
+        var kneeAngle: Double { PoseMath.angle(hip, knee, ankle) }
+        var length: Double {
+            Double(hypot(hip.x - knee.x, hip.y - knee.y) + hypot(knee.x - ankle.x, knee.y - ankle.y))
         }
-        let right = zip3(j[.rightHip], j[.rightKnee], j[.rightAnkle]).map {
-            Side(shoulder: j[.rightShoulder], hip: $0.0, knee: $0.1, ankle: $0.2)
-        }
-        return left ?? right
     }
 
-    private static func zip3<A, B, C>(_ a: A?, _ b: B?, _ c: C?) -> (A, B, C)? {
-        guard let a, let b, let c else { return nil }
-        return (a, b, c)
+    private struct Arm {
+        let elbowAngle: Double
+        /// How far the shoulder–hip–ankle line is from straight, if the camera can see it.
+        let bodySag: Double?
+    }
+
+    private static func leg(_ j: Joints, left: Bool) -> Leg? {
+        guard let hip = j[left ? .leftHip : .rightHip],
+              let knee = j[left ? .leftKnee : .rightKnee],
+              let ankle = j[left ? .leftAnkle : .rightAnkle] else { return nil }
+        return Leg(hip: hip, knee: knee, ankle: ankle)
+    }
+
+    private static func arm(_ j: Joints, left: Bool) -> Arm? {
+        guard let shoulder = j[left ? .leftShoulder : .rightShoulder],
+              let elbow = j[left ? .leftElbow : .rightElbow],
+              let wrist = j[left ? .leftWrist : .rightWrist] else { return nil }
+        var sag: Double?
+        if let hip = j[left ? .leftHip : .rightHip], let ankle = j[left ? .leftAnkle : .rightAnkle] {
+            sag = 180 - PoseMath.angle(shoulder, hip, ankle)
+        }
+        return Arm(elbowAngle: PoseMath.angle(shoulder, elbow, wrist), bodySag: sag)
+    }
+
+    private static func torsoLean(_ j: Joints) -> Double? {
+        if let hip = j[.leftHip], let shoulder = j[.leftShoulder] {
+            return PoseMath.leanFromVertical(hip: hip, shoulder: shoulder)
+        }
+        if let hip = j[.rightHip], let shoulder = j[.rightShoulder] {
+            return PoseMath.leanFromVertical(hip: hip, shoulder: shoulder)
+        }
+        return nil
     }
 }
 
