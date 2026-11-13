@@ -6,9 +6,9 @@ final class UserProfile {
     var name: String
     var focusRaw: String
     var createdAt: Date
-    var checkInReminderEnabled: Bool
-    var checkInReminderHour: Int
-    var checkInReminderMinute: Int
+    var workoutReminderEnabled: Bool
+    var workoutReminderHour: Int
+    var workoutReminderMinute: Int
     /// The user has confirmed a doctor or midwife has cleared them to exercise after birth.
     var postpartumClearanceConfirmed: Bool
 
@@ -21,89 +21,10 @@ final class UserProfile {
         self.name = name
         self.focusRaw = focus.rawValue
         self.createdAt = .now
-        self.checkInReminderEnabled = true
-        self.checkInReminderHour = 9
-        self.checkInReminderMinute = 0
+        self.workoutReminderEnabled = true
+        self.workoutReminderHour = 9
+        self.workoutReminderMinute = 0
         self.postpartumClearanceConfirmed = false
-    }
-}
-
-@Model
-final class Medication {
-    var id: UUID
-    var name: String
-    var dosage: String
-    var notes: String
-    /// Reminder times as minutes after midnight, e.g. 8:30 am = 510.
-    var minutesOfDay: [Int]
-    var createdAt: Date
-    @Relationship(deleteRule: .cascade, inverse: \MedicationDose.medication)
-    var doses: [MedicationDose] = []
-
-    init(name: String, dosage: String, notes: String = "", minutesOfDay: [Int]) {
-        self.id = UUID()
-        self.name = name
-        self.dosage = dosage
-        self.notes = notes
-        self.minutesOfDay = minutesOfDay.sorted()
-        self.createdAt = .now
-    }
-
-    /// Whether the dose scheduled at `minute` has been marked taken on `day`.
-    func isTaken(minute: Int, on day: Date = .now, calendar: Calendar = .current) -> Bool {
-        doses.contains { $0.scheduledMinute == minute && calendar.isDate($0.takenAt, inSameDayAs: day) }
-    }
-}
-
-@Model
-final class MedicationDose {
-    var takenAt: Date
-    var scheduledMinute: Int
-    var medication: Medication?
-
-    init(takenAt: Date = .now, scheduledMinute: Int, medication: Medication) {
-        self.takenAt = takenAt
-        self.scheduledMinute = scheduledMinute
-        self.medication = medication
-    }
-}
-
-@Model
-final class FamilyContact {
-    var id: UUID
-    var name: String
-    var relationship: String
-    var phone: String
-    @Attribute(.externalStorage) var photoData: Data?
-    var receivesCheckIns: Bool
-    var sortOrder: Int
-
-    init(name: String, relationship: String, phone: String, photoData: Data? = nil,
-         receivesCheckIns: Bool = true, sortOrder: Int = 0) {
-        self.id = UUID()
-        self.name = name
-        self.relationship = relationship
-        self.phone = phone
-        self.photoData = photoData
-        self.receivesCheckIns = receivesCheckIns
-        self.sortOrder = sortOrder
-    }
-
-    /// Phone number reduced to digits and a leading "+", safe to put in a tel: URL.
-    var dialableNumber: String {
-        PhoneNumber.dialable(phone)
-    }
-}
-
-@Model
-final class CheckIn {
-    var date: Date
-    /// "ok" or "needsCall"
-    var status: String
-
-    init(date: Date = .now, status: String) {
-        self.date = date
-        self.status = status
     }
 }
 
@@ -119,17 +40,6 @@ final class WorkoutLog {
         self.workoutID = workoutID
         self.title = title
         self.durationSeconds = durationSeconds
-    }
-}
-
-enum PhoneNumber {
-    static func dialable(_ raw: String) -> String {
-        var result = ""
-        for (index, ch) in raw.trimmingCharacters(in: .whitespaces).enumerated() {
-            if ch.isASCII && ch.isNumber { result.append(ch) }
-            else if ch == "+" && index == 0 { result.append(ch) }
-        }
-        return result
     }
 }
 

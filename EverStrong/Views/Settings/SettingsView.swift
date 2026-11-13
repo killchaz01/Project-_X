@@ -8,11 +8,11 @@ struct SettingsView: View {
 
     private var reminderTime: Binding<Date> {
         Binding(
-            get: { TimeFormat.date(minuteOfDay: profile.checkInReminderHour * 60 + profile.checkInReminderMinute) },
+            get: { TimeFormat.date(minuteOfDay: profile.workoutReminderHour * 60 + profile.workoutReminderMinute) },
             set: {
                 let m = TimeFormat.minuteOfDay(from: $0)
-                profile.checkInReminderHour = m / 60
-                profile.checkInReminderMinute = m % 60
+                profile.workoutReminderHour = m / 60
+                profile.workoutReminderMinute = m % 60
             }
         )
     }
@@ -34,15 +34,13 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    Toggle("Remind me to check in", isOn: $profile.checkInReminderEnabled).font(.title3)
-                    if profile.checkInReminderEnabled {
+                    Toggle("Remind me to work out", isOn: $profile.workoutReminderEnabled).font(.title3)
+                    if profile.workoutReminderEnabled {
                         DatePicker("Reminder time", selection: reminderTime, displayedComponents: .hourAndMinute)
                             .font(.title3)
                     }
                 } header: {
-                    Text("Daily “I'm OK” check-in")
-                } footer: {
-                    Text(Disclaimers.checkIn)
+                    Text("Daily reminder")
                 }
 
                 Section {
@@ -67,19 +65,22 @@ struct SettingsView: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.font(.title3.bold()) }
             }
-            .onChange(of: profile.checkInReminderEnabled) { updateReminder() }
-            .onChange(of: profile.checkInReminderHour) { updateReminder() }
-            .onChange(of: profile.checkInReminderMinute) { updateReminder() }
+            .onChange(of: profile.workoutReminderEnabled) { updateReminder() }
+            .onChange(of: profile.workoutReminderHour) { updateReminder() }
+            .onChange(of: profile.workoutReminderMinute) { updateReminder() }
         }
     }
 
     private func updateReminder() {
-        if profile.checkInReminderEnabled {
-            NotificationService.scheduleDailyCheckIn(hour: profile.checkInReminderHour,
-                                                     minute: profile.checkInReminderMinute,
-                                                     name: profile.name)
+        if profile.workoutReminderEnabled {
+            Task {
+                guard await NotificationService.requestAuthorization() else { return }
+                NotificationService.scheduleDailyWorkoutReminder(hour: profile.workoutReminderHour,
+                                                                 minute: profile.workoutReminderMinute,
+                                                                 name: profile.name)
+            }
         } else {
-            NotificationService.cancelDailyCheckIn()
+            NotificationService.cancelDailyWorkoutReminder()
         }
     }
 }

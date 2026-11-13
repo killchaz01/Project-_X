@@ -1,17 +1,17 @@
 # EverStrong (working name)
 
-An iPhone and iPad app that brings together guided workouts, medicine reminders and staying in touch with family. It is designed to be easy to use for older adults and anyone who wants big, clear, simple screens.
+A simple, guided workout app for iPhone and iPad. It is designed to be easy to use for older adults and anyone who wants big, clear, simple screens.
 
 | Tab | What it does |
 |---|---|
-| **Today** | Greeting, the big green **I'm OK today** button, the next medicine due, today's suggested workout, this week's progress, and photo buttons to call family. |
-| **Workouts** | Programs for **Strong Over 50**, **Postpartum Recovery**, **Fitness Race Prep** (Hyrox-style hybrid racing) and **General Fitness**, plus **micro-workouts** of 5 minutes or less. A guided player gives a large countdown and reads each step aloud. |
+| **Today** | A greeting, today's suggested micro-workout and program workout, and this week's progress. |
+| **Workouts** | Programs for **Strong Over 50**, **Postpartum Recovery**, **Fitness Race Prep** (hybrid fitness racing) and **General Fitness**, plus **micro-workouts** of 5 minutes or less. A guided player gives a large countdown and reads each step aloud. Every exercise has an easier option. |
 | **Form Check** | On-device AI uses the camera and Apple's Vision body-pose model to count reps for **squats, lunges and push-ups** and to time **single-leg balance** holds. It gives spoken tips on depth and posture. Video is never recorded or uploaded. It can also be started from any exercise in a workout. |
-| **Medicines** | Add medicines with one or more daily times. The app sends a reminder notification and has a large **Taken** button. |
-| **Family** | Large photo tiles; tap one to call that person. Add people by choosing them from Contacts. Choose who gets your daily check-in text. |
-| **My Progress** (from Today) | Active days this week against a weekly goal, workout streak, minutes moved, check-in streak and how many medicine doses were taken in the last 7 days. |
+| **Progress** | Active days this week against a weekly goal, workout streak, minutes moved and recent workouts. |
 
-When you first open the app, it asks what you're training for. That choice sets which program the Today screen suggests. Everything else stays available to everyone.
+When you first open the app, it asks what you're training for. That choice sets which program the Today screen suggests. All programs stay available to everyone.
+
+An optional daily notification reminds the user to work out. The time can be changed, or the reminder turned off, in Settings.
 
 ### Built for older users
 - Every button is at least 72 points tall and has strong contrast.
@@ -20,21 +20,26 @@ When you first open the app, it asks what you're training for. That choice sets 
 - Plain language and one main action per screen.
 - Labelled for VoiceOver.
 
+### Safety
+- Exercise disclaimers in onboarding and on every workout.
+- Postpartum workouts stay locked until the user confirms their doctor or midwife has cleared them.
+
 ### Privacy
-All data stays on the device and is stored with SwiftData. There are no accounts, servers, analytics or ads. The App Store privacy label can say **Data Not Collected**.
+All data stays on the device and is stored with SwiftData. There are no accounts, servers, analytics or ads. The only permissions are the camera (for form checks) and notifications (for the optional reminder). The App Store privacy label can say **Data Not Collected**.
 
 ---
 
 ## Building the app (needs a Mac)
 
-1. Install **Xcode** from the Mac App Store.
-2. Install XcodeGen: `brew install xcodegen` (Homebrew is at https://brew.sh).
-3. In this folder, run `xcodegen`. This creates `EverStrong.xcodeproj`.
-4. Open `EverStrong.xcodeproj`. Select the **EverStrong** target, open **Signing & Capabilities**, and choose your Team.
-5. In `project.yml`, change `PRODUCT_BUNDLE_IDENTIFIER` from `com.example.everstrong` to your own ID, e.g. `com.yourname.everstrong`. Then run `xcodegen` again.
-6. Choose an iPhone simulator and press ⌘R to run. Press ⌘U to run the tests.
+1. Install **Xcode** from the Mac App Store. Open it once and let it install the iOS components.
+2. Install Homebrew from https://brew.sh, then XcodeGen: `brew install xcodegen`.
+3. Download this repository (the `claude/youthful-einstein-g7prmv` branch) and open Terminal in its folder.
+4. Run `xcodegen`. This creates `EverStrong.xcodeproj`.
+5. Open `EverStrong.xcodeproj`. Select the **EverStrong** target, open **Signing & Capabilities**, and choose your Team (your free Apple ID is enough for testing).
+6. In `project.yml`, change `PRODUCT_BUNDLE_IDENTIFIER` from `com.example.everstrong` to your own ID, e.g. `com.yourname.everstrong`. Then run `xcodegen` again.
+7. Choose an iPhone simulator and press ⌘R to run. Press ⌘U to run the tests.
 
-> Form check needs a **real iPhone**, because the simulator has no camera. Sending check-in texts and placing calls also only work on a real iPhone. You can run on your own iPhone for free with a personal Apple ID before you pay for the developer program.
+> Form check needs a **real iPhone**, because the simulator has no camera. You can run on your own iPhone for free with a personal Apple ID before you pay for the developer program.
 
 Requires iOS 17 or later.
 
@@ -58,19 +63,19 @@ See `docs/APP_STORE_LISTING.md` for review risks and how this app addresses them
 project.yml                 XcodeGen project definition
 EverStrong/
   App/                      App entry point, settings keys
-  Models/                   SwiftData models (profile, medicines, family, check-ins, workout log)
+  Models/                   SwiftData models (profile, workout log)
   Data/                     Exercise and workout content
-  Services/                 Notifications, speech, pose maths, camera and form check, workout timer
-  Views/                    SwiftUI screens, one folder per tab
+  Services/                 Reminder, speech, pose maths, camera and form check, workout timer, progress maths
+  Views/                    SwiftUI screens
   Resources/                App icon, accent colour, privacy manifest
-EverStrongTests/            Unit tests (pose maths, rep counting, workout timing, content)
+EverStrongTests/            Unit tests (pose maths, rep counting, balance timing, workout timing, progress, content)
 docs/                       App Store listing draft and privacy policy
 ```
 
 ## Known limitations and ideas for later
-- **Automatic alert if no check-in.** Today, check-ins are texts the user sends. Alerting family automatically when nobody checks in needs a small server and push notifications. This is a good candidate for a paid upgrade.
 - Form check thresholds (how deep counts as a rep, how much lean triggers a tip) are sensible starting values. They need tuning with real people on a real iPhone.
-- A **Taken** button directly on the medicine reminder notification, so the app doesn't need to be opened.
+- Longer, week-by-week programs for each focus.
 - Apple Health sync for workouts, and an Apple Watch app.
-- Subscriptions via StoreKit, if you choose that pricing model.
+- Payments via StoreKit, once the pricing model is chosen.
+- Medicine reminders, one-tap family calling and a daily "I'm OK" check-in were built and then removed to keep the first release focused. They remain in the git history (commit `1074e09` and the one after it) and could return as a separate companion app.
 - The app name **EverStrong** is a placeholder. Check that it is available in App Store Connect and isn't someone else's trademark.

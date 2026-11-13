@@ -54,7 +54,7 @@ struct OnboardingView: View {
             Image(systemName: "heart.circle.fill")
                 .font(.system(size: 96)).foregroundStyle(Color.accentColor)
             Text("Welcome to EverStrong").font(.largeTitle.bold())
-            Text("Workouts made for you, reminders for your medicines, and an easy way to stay in touch with family.")
+            Text("Simple, guided workouts made for you, with a coach in your camera to check your form.")
                 .font(.title3)
             Toggle(isOn: $largeText) {
                 Label("Extra large text", systemImage: "textformat.size").font(.title3)
@@ -73,7 +73,7 @@ struct OnboardingView: View {
                 .textContentType(.givenName)
                 .padding()
                 .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
-            Text("This is used to greet you and to sign your check-in messages to family.")
+            Text("This is only used to greet you. It stays on your iPhone.")
                 .font(.body).foregroundStyle(.secondary)
         }
     }
@@ -104,8 +104,8 @@ struct OnboardingView: View {
     private var remindersStep: some View {
         VStack(alignment: .leading, spacing: 20) {
             Image(systemName: "bell.badge.fill").font(.system(size: 72)).foregroundStyle(Color.accentColor)
-            Text("Turn on reminders").font(.largeTitle.bold())
-            Text("EverStrong can remind you to take your medicines and to send your daily “I'm OK” message to family. On the next screen, tap **Allow**.")
+            Text("A daily nudge to move").font(.largeTitle.bold())
+            Text("EverStrong can remind you once a day to do your workout. On the next screen, tap **Allow**. You can change the time or turn it off in Settings.")
                 .font(.title3)
         }
     }
@@ -137,15 +137,18 @@ struct OnboardingView: View {
     }
 
     private func finish() async {
-        await NotificationService.requestAuthorization()
+        let granted = await NotificationService.requestAuthorization()
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         let profile = UserProfile(name: trimmed, focus: focus)
         profile.postpartumClearanceConfirmed = postpartumCleared
+        profile.workoutReminderEnabled = granted
         context.insert(profile)
         try? context.save()
-        NotificationService.scheduleDailyCheckIn(hour: profile.checkInReminderHour,
-                                                 minute: profile.checkInReminderMinute,
-                                                 name: trimmed)
+        if granted {
+            NotificationService.scheduleDailyWorkoutReminder(hour: profile.workoutReminderHour,
+                                                             minute: profile.workoutReminderMinute,
+                                                             name: trimmed)
+        }
     }
 }
 

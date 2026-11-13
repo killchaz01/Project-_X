@@ -30,8 +30,6 @@ struct WeekStrip: View {
 
 struct ProgressScreen: View {
     @Query(sort: \WorkoutLog.date, order: .reverse) private var logs: [WorkoutLog]
-    @Query(sort: \CheckIn.date, order: .reverse) private var checkIns: [CheckIn]
-    @Query private var medications: [Medication]
     @AppStorage(AppSettings.weeklyGoal) private var weeklyGoal = 3
 
     private var workoutDates: [Date] { logs.map(\.date) }
@@ -41,12 +39,6 @@ struct ProgressScreen: View {
         let week = Set(ProgressStats.weekDays())
         return logs.filter { week.contains(Calendar.current.startOfDay(for: $0.date)) }
             .reduce(0) { $0 + $1.durationSeconds } / 60
-    }
-
-    private var adherence: Double? {
-        ProgressStats.adherence(medications.map {
-            ProgressStats.MedicationSummary(createdAt: $0.createdAt, minutesOfDay: $0.minutesOfDay, takenDates: $0.doses.map(\.takenAt))
-        })
     }
 
     var body: some View {
@@ -68,19 +60,7 @@ struct ProgressScreen: View {
                     StatTile(value: "\(ProgressStats.streak(activeDates: workoutDates))", label: "day streak", symbol: "flame.fill", color: .orange)
                     StatTile(value: "\(minutesThisWeek)", label: "minutes this week", symbol: "clock.fill", color: .accentColor)
                 }
-                HStack(spacing: 16) {
-                    StatTile(value: "\(logs.count)", label: "workouts done", symbol: "star.fill", color: .yellow)
-                    StatTile(value: "\(ProgressStats.streak(activeDates: checkIns.map(\.date)))", label: "check-in streak", symbol: "hand.wave.fill", color: .green)
-                }
-
-                if let adherence {
-                    Card {
-                        Label("Medicines, last 7 days", systemImage: "pills.fill").font(.title2.bold())
-                        Text("\(Int((adherence * 100).rounded()))% taken").font(.title.bold())
-                        ProgressView(value: adherence).tint(adherence >= 0.9 ? .green : .orange)
-                        Text("Based on the doses you marked as taken.").font(.callout).foregroundStyle(.secondary)
-                    }
-                }
+                StatTile(value: "\(logs.count)", label: "workouts done", symbol: "star.fill", color: .yellow)
 
                 Card {
                     Label("Recent workouts", systemImage: "list.bullet").font(.title2.bold())

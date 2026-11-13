@@ -28,10 +28,8 @@ struct MainTabView: View {
                 .tabItem { Label("Workouts", systemImage: "figure.strengthtraining.functional") }
             FormCheckView()
                 .tabItem { Label("Form Check", systemImage: "camera.viewfinder") }
-            MedicationsView()
-                .tabItem { Label("Medicines", systemImage: "pills.fill") }
-            FamilyView(profile: profile)
-                .tabItem { Label("Family", systemImage: "person.2.fill") }
+            NavigationStack { ProgressScreen() }
+                .tabItem { Label("Progress", systemImage: "chart.bar.fill") }
         }
     }
 }

@@ -1,20 +1,20 @@
 # App Store listing (draft)
 
 ## Basics
-- **Name** (max 30 characters): EverStrong: Fitness & Care
-- **Subtitle** (max 30): Workouts, meds & family calls
-- **Category**: Health & Fitness (secondary: Lifestyle)
+- **Name** (max 30 characters): EverStrong: Simple Workouts
+- **Subtitle** (max 30): Strength, balance & form check
+- **Category**: Health & Fitness
 - **Age rating**: 4+
 - **Price**: still to decide. Options:
   - One-time paid app, e.g. $4.99. Simple, and older users like it.
   - Free download plus a one-time "Pro" unlock.
-  - Subscription, best suited once server features such as automatic family alerts exist.
+  - Subscription, best suited once there is regular new content.
 
 ## Promotional text (170)
-Strength for over 50s, postpartum recovery, race prep and 5-minute workouts, plus medicine reminders and one-tap family calls.
+Guided strength for over 50s, postpartum recovery, race prep and 5-minute workouts, with an AI coach in your camera to check your form.
 
 ## Description
-EverStrong keeps you moving, keeps you on track with your medicines, and keeps you close to the people you love, in one simple app with big, clear buttons.
+EverStrong makes exercise simple: big, clear buttons, a voice that guides you, and workouts that fit your life.
 
 WORKOUTS MADE FOR YOU
 • Strong Over 50: gentle strength, balance and mobility
@@ -26,15 +26,11 @@ WORKOUTS MADE FOR YOU
 AI FORM CHECK
 Prop up your iPhone and move. EverStrong counts your squats, lunges and push-ups, times your balance holds, and gives friendly tips on depth and posture. It all happens on your phone, and video is never recorded.
 
-MEDICINE REMINDERS
-Add your medicines and times. Get a reminder, then tap one big button to mark it taken.
-
 SEE YOUR PROGRESS
-A simple weekly view of your active days, streaks and medicines taken.
+A simple weekly view of your active days, streak and minutes moved, with a goal you set yourself.
 
-FAMILY, ONE TAP AWAY
-Add photos of the people you call most. Tap a face to call.
-Send a daily "I'm OK" message to family in two taps, or ask them to call you.
+EASY TO USE
+Extra large text, large buttons and plain words. No account needed.
 
 PRIVATE BY DESIGN
 No account. No ads. No tracking. Everything stays on your iPhone.
@@ -42,7 +38,7 @@ No account. No ads. No tracking. Everything stays on your iPhone.
 EverStrong offers general fitness guidance and is not medical advice. Check with your doctor before starting a new exercise program.
 
 ## Keywords (100 characters, comma-separated, no spaces)
-seniors,elderly,strength,balance,postpartum,hybrid,race,micro,workout,medication,reminder,check in
+seniors,over 50,strength,balance,postpartum,hybrid,race,micro,workout,form,posture,mobility,chair
 
 > Do **not** use "HYROX" in the name, subtitle or keywords. It is a registered trademark, and Apple rejects listings that use other companies' trademarks (Guidelines 2.3.7 and 5.2.1). Describing the program as "hybrid fitness race" training is safe.
 
@@ -52,11 +48,10 @@ seniors,elderly,strength,balance,postpartum,hybrid,race,micro,workout,medication
 
 ## Notes for App Review
 > EverStrong stores all data on the device; there is no login. To test:
-> 1. Complete onboarding (any name).
-> 2. Medicines tab → Add a medicine with a time 1–2 minutes from now to see the reminder.
-> 3. Family tab → add a person with any phone number → tap their photo to start a call.
-> 4. Today → "I'm OK today" opens a pre-filled text message to family members.
-> 5. Form Check requires a real device camera; stand side-on and do squats.
+> 1. Complete onboarding (any name, any focus).
+> 2. Today → start the suggested micro-workout (about 3 minutes; use Skip to move through it).
+> 3. Workouts → open any workout to see its exercises and start it.
+> 4. Form Check requires a real device camera: choose an exercise, prop the device up and move in view.
 > The camera is used only for live, on-device pose detection; frames are not stored or transmitted.
 
 ## Review risks and how this app handles them
@@ -64,5 +59,5 @@ seniors,elderly,strength,balance,postpartum,hybrid,race,micro,workout,medication
 |---|---|---|
 | 1.4.1 Physical harm (health) | Fitness and medical-style claims | Clear disclaimers in onboarding, workouts and form check. No diagnosis or treatment claims. Postpartum workouts stay locked until the user confirms medical clearance. |
 | 5.1.1 Data collection | Camera and permissions | Clear purpose text for the camera. All processing on-device. Privacy policy URL provided. |
-| 4.0 Design | Too many unrelated features | One onboarding question sets the focus, and the Today screen ties everything into one daily routine. |
+| 4.0 Design | Unfocused app | The app does one thing: guided workouts with form checks. One onboarding question sets which program is suggested. |
 | 2.3.7 / 5.2.1 Trademarks | "Hyrox" | Program named "Fitness Race Prep" with "hybrid race" wording. |

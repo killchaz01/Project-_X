@@ -28,7 +28,6 @@ targets:
           UIColorName: AccentColor
         ITSAppUsesNonExemptEncryption: false
         NSCameraUsageDescription: "EverStrong uses the camera to check your exercise form. Video is analysed on your iPhone and is never recorded or uploaded."
-        LSApplicationQueriesSchemes: [tel, sms]
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         UISupportedInterfaceOrientations~ipad:
@@ -36,10 +35,6 @@ targets:
           - UIInterfaceOrientationPortraitUpsideDown
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
-    entitlements:
-      path: EverStrong/EverStrong.entitlements
-      properties:
-        com.apple.developer.usernotifications.time-sensitive: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.example.everstrong   # change to your own reverse-domain ID

@@ -30,39 +30,4 @@ enum ProgressStats {
         let week = Set(weekDays(containing: today, calendar: calendar))
         return Set(activeDates.map { calendar.startOfDay(for: $0) }).intersection(week)
     }
-
-    struct MedicationSummary {
-        let createdAt: Date
-        let minutesOfDay: [Int]
-        let takenDates: [Date]
-    }
-
-    /// Share of scheduled doses marked taken over the last `days` days (0–1), or nil if none were due.
-    /// Doses later today that aren't due yet are not counted against the user.
-    static func adherence(_ medications: [MedicationSummary], days: Int = 7,
-                          now: Date = .now, calendar: Calendar = .current) -> Double? {
-        let today = calendar.startOfDay(for: now)
-        guard let windowStart = calendar.date(byAdding: .day, value: -(days - 1), to: today) else { return nil }
-        let nowMinute = TimeFormat.minuteOfDay(from: now, calendar: calendar)
-        var expected = 0
-        var taken = 0
-        for med in medications {
-            let firstDay = max(windowStart, calendar.startOfDay(for: med.createdAt))
-            var day = firstDay
-            var expectedForMed = 0
-            while day <= today {
-                if day == today {
-                    expectedForMed += med.minutesOfDay.filter { $0 <= nowMinute }.count
-                } else {
-                    expectedForMed += med.minutesOfDay.count
-                }
-                guard let next = calendar.date(byAdding: .day, value: 1, to: day) else { break }
-                day = next
-            }
-            let takenForMed = med.takenDates.filter { $0 >= firstDay && $0 <= now }.count
-            expected += expectedForMed
-            taken += min(takenForMed, expectedForMed)
-        }
-        return expected == 0 ? nil : Double(taken) / Double(expected)
-    }
 }

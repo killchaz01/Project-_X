@@ -12,10 +12,6 @@ struct EverStrongApp: App {
         }
         .modelContainer(for: [
             UserProfile.self,
-            Medication.self,
-            MedicationDose.self,
-            FamilyContact.self,
-            CheckIn.self,
             WorkoutLog.self
         ])
     }
