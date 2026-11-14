@@ -1,0 +1,7 @@
+# Console font. For a HiDPI screen change FONTSIZE to 16x32, then run
+# sudo setupcon
+ACTIVE_CONSOLES="/dev/tty[1-6]"
+CHARMAP="UTF-8"
+CODESET="Lat15"
+FONTFACE="Terminus"
+FONTSIZE="8x16"

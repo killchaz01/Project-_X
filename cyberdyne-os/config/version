@@ -1,0 +1,4 @@
+# Release identity. Sourced by build.sh.
+OS_NAME="Cyberdyne OS"
+OS_VERSION="0.1"
+OS_CODENAME="Model 101"

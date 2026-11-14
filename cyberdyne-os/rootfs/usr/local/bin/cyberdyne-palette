@@ -1,0 +1,22 @@
+#!/bin/bash
+# cyberdyne-palette - switch the console colours.
+#   cyberdyne-palette hud        red/amber HUD colours (the default)
+#   cyberdyne-palette standard   ordinary Linux console colours
+# Works on the Linux text console only; lasts until reboot.
+set -eu
+standard=(000000 aa0000 00aa00 aa5500 0000aa aa00aa 00aaaa aaaaaa
+          555555 ff5555 55ff55 ffff55 5555ff ff55ff 55ffff ffffff)
+
+case "${1:-}" in
+    hud)      mapfile -t cols < <(awk '/^[0-9]/ {print $2}' /etc/cyberdyne/palette) ;;
+    standard) cols=("${standard[@]}") ;;
+    *)        sed -n '2,5s/^# \{0,1\}//p' "$0"; exit 1 ;;
+esac
+if [ "${TERM:-}" != linux ]; then
+    echo "cyberdyne-palette: this only works on the Linux text console" >&2
+    exit 1
+fi
+for i in "${!cols[@]}"; do
+    printf '\e]P%X%s' "$i" "${cols[$i]}"
+done
+clear

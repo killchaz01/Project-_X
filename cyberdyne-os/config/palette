@@ -1,0 +1,21 @@
+# The 16 Linux console colours, one per line: index  hex  role.
+# This is the whole "HUD" look: every ANSI colour is remapped into the
+# red / amber range of the T-800's vision. build.sh turns this table into
+# vt.default_red/grn/blu kernel parameters, and cyberdyne-palette uses it
+# at runtime.
+0  0a0000  background
+1  c40000  red
+2  ff6a00  green   -> orange
+3  ffa000  yellow  -> amber
+4  8a1a1a  blue    -> dark red
+5  ff2d55  magenta -> hot red
+6  ff8c69  cyan    -> salmon
+7  ff3b30  default text
+8  5a1010  bright black (dim)
+9  ff0000  bright red
+10 ff8533  bright green  -> orange
+11 ffc04d  bright yellow -> amber
+12 b33a3a  bright blue   -> brick
+13 ff5c7a  bright magenta
+14 ffb199  bright cyan
+15 ffe5e0  white

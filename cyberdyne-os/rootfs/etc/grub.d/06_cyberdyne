@@ -1,0 +1,7 @@
+#!/bin/sh
+# Red-on-black boot menu.
+cat <<'CFG'
+set color_normal=light-red/black
+set menu_color_normal=red/black
+set menu_color_highlight=black/red
+CFG

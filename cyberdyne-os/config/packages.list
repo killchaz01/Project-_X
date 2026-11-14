@@ -1,0 +1,51 @@
+# One package per line. Installed into the root filesystem by chroot-setup.sh.
+
+# --- Layer 1: kernel and early boot ---
+linux-image-generic
+initramfs-tools
+live-boot
+live-boot-initramfs-tools
+zstd
+
+# --- Layer 2: core userland ---
+systemd-sysv
+systemd-timesyncd
+dbus
+udev
+kmod
+sudo
+locales
+console-setup
+kbd
+bash-completion
+less
+nano
+vim-tiny
+procps
+psmisc
+htop
+man-db
+file
+ca-certificates
+curl
+wget
+openssh-client
+pciutils
+usbutils
+
+# --- Layer 2: networking ---
+network-manager
+iproute2
+iputils-ping
+wpasupplicant
+
+# --- Layer 2: disks and installing to a drive ---
+parted
+dosfstools
+e2fsprogs
+rsync
+grub-common
+grub2-common
+grub-pc-bin
+grub-efi-amd64-bin
+efibootmgr

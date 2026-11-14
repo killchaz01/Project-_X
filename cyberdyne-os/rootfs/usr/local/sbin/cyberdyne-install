@@ -1,0 +1,119 @@
+#!/bin/bash
+# cyberdyne-install - copy the running live system onto a disk.
+#
+#   sudo cyberdyne-install [/dev/DISK]
+#
+# The WHOLE disk is erased. It gets three partitions: a 1 MB BIOS boot
+# area, a 512 MB EFI system partition, and the rest as an ext4 root.
+# The result boots on both BIOS and UEFI machines.
+#
+# For unattended use set CYB_USER, CYB_PASS, CYB_HOST and CYB_YES=1.
+set -euo pipefail
+
+die() { echo "cyberdyne-install: $*" >&2; exit 1; }
+say() { printf '\n\e[1;31m>> %s\e[0m\n' "$*"; }
+
+[ "$(id -u)" -eq 0 ] || die "run this with sudo"
+
+SRC=/run/live/rootfs/filesystem.squashfs
+[ -d "$SRC" ] || die "no live system found at $SRC (run this from the live ISO)"
+
+DISK=${1:-}
+if [ -z "$DISK" ]; then
+    echo "Disks on this machine:"
+    lsblk -d -o NAME,SIZE,MODEL,TRAN -e 7,11
+    read -rp "Install to which disk (for example sda or nvme0n1)? " DISK
+fi
+case $DISK in /dev/*) ;; *) DISK=/dev/$DISK ;; esac
+[ -b "$DISK" ] || die "$DISK is not a disk"
+[ "$(lsblk -dno TYPE "$DISK")" = disk ] || die "$DISK is not a whole disk"
+if grep -q "^$DISK" /proc/mounts; then
+    die "$DISK has mounted partitions; unmount them first"
+fi
+live_dev=$(findmnt -no SOURCE /run/live/medium 2>/dev/null || true)
+case $live_dev in "$DISK"*) die "$DISK is the drive the live system booted from" ;; esac
+
+USERNAME=${CYB_USER:-}
+while [[ ! $USERNAME =~ ^[a-z][a-z0-9_-]{0,30}$ ]]; do
+    read -rp "Your login name (lowercase): " USERNAME
+done
+PASSWORD=${CYB_PASS:-}
+while [ -z "$PASSWORD" ]; do
+    read -rsp "Password for $USERNAME: " p1; echo
+    read -rsp "Same password again: " p2; echo
+    if [ -n "$p1" ] && [ "$p1" = "$p2" ]; then PASSWORD=$p1; else echo "They did not match."; fi
+done
+HOSTNAME_NEW=${CYB_HOST:-}
+if [ -z "$HOSTNAME_NEW" ]; then
+    read -rp "Name for this machine [cyberdyne]: " HOSTNAME_NEW
+    HOSTNAME_NEW=${HOSTNAME_NEW:-cyberdyne}
+fi
+[[ $HOSTNAME_NEW =~ ^[a-zA-Z0-9][a-zA-Z0-9-]{0,62}$ ]] || die "bad machine name: $HOSTNAME_NEW"
+
+if [ "${CYB_YES:-}" != 1 ]; then
+    echo
+    lsblk -o NAME,SIZE,FSTYPE,LABEL,MOUNTPOINT "$DISK"
+    echo
+    echo "EVERYTHING on $DISK will be erased."
+    read -rp "Type TERMINATE to continue: " answer
+    [ "$answer" = TERMINATE ] || die "cancelled, nothing was changed"
+fi
+
+case $DISK in *[0-9]) P=${DISK}p ;; *) P=$DISK ;; esac
+T=/mnt/cyberdyne-target
+cleanup() {
+    for m in dev/pts dev proc sys/firmware/efi/efivars sys run boot/efi ""; do
+        mountpoint -q "$T/$m" && umount -l "$T/$m"
+    done
+    return 0
+}
+trap cleanup EXIT
+
+say "PARTITIONING $DISK"
+wipefs -aq "$DISK"
+parted -s "$DISK" \
+    mklabel gpt \
+    mkpart bios 1MiB 2MiB      set 1 bios_grub on \
+    mkpart ESP fat32 2MiB 514MiB  set 2 esp on \
+    mkpart root ext4 514MiB 100%
+partprobe "$DISK"; udevadm settle
+mkfs.vfat -F32 -n CYB-EFI "${P}2" >/dev/null
+mkfs.ext4 -qF -L CYBERDYNE "${P}3"
+
+say "COPYING SYSTEM"
+mkdir -p "$T"
+mount "${P}3" "$T"
+mkdir -p "$T/boot/efi"
+mount "${P}2" "$T/boot/efi"
+rsync -aHAX --info=progress2 "$SRC"/ "$T"/
+
+say "CONFIGURING"
+cat > "$T/etc/fstab" <<FSTAB
+UUID=$(blkid -s UUID -o value "${P}3")  /          ext4  errors=remount-ro  0 1
+UUID=$(blkid -s UUID -o value "${P}2")  /boot/efi  vfat  umask=0077         0 2
+FSTAB
+echo "$HOSTNAME_NEW" > "$T/etc/hostname"
+sed -i "s/^127\.0\.1\.1.*/127.0.1.1   $HOSTNAME_NEW/" "$T/etc/hosts"
+rm -rf "$T/etc/systemd/system/getty@tty1.service.d"
+rm -f "$T/etc/machine-id" "$T/var/lib/dbus/machine-id"
+: > "$T/etc/machine-id"
+
+for m in dev dev/pts proc sys run; do mount --bind "/$m" "$T/$m"; done
+if [ -d /sys/firmware/efi/efivars ]; then
+    mount --bind /sys/firmware/efi/efivars "$T/sys/firmware/efi/efivars" || true
+fi
+
+chroot "$T" userdel -r dyson 2>/dev/null || true
+chroot "$T" useradd -m -s /bin/bash -G sudo,audio,video,plugdev,netdev "$USERNAME"
+printf '%s:%s\n' "$USERNAME" "$PASSWORD" | chroot "$T" chpasswd
+
+say "INSTALLING BOOT LOADER"
+chroot "$T" grub-install --target=i386-pc "$DISK"
+# --removable puts the loader at the default EFI path, so the disk boots
+# without needing an entry in the firmware's boot list.
+chroot "$T" grub-install --target=x86_64-efi --efi-directory=/boot/efi \
+    --removable --no-nvram
+chroot "$T" update-grub
+
+sync
+say "INSTALL COMPLETE. Remove the live medium and reboot."
