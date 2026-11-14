@@ -1,0 +1,18 @@
+# Written by hudctl from the active theme.
+font={{font_ui}} {{font_size}}
+anchor=top-right
+margin=10
+padding=10,14
+width=360
+border-size=1
+border-radius={{radius}}
+background-color={{panel}}f2
+text-color={{text}}
+border-color={{line}}
+progress-color=over {{line_dim}}
+default-timeout=6000
+
+[urgency=critical]
+border-color={{alert}}
+text-color={{alert}}
+default-timeout=0

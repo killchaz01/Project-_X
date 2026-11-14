@@ -1,0 +1,15 @@
+#!/bin/sh
+# hud-session - start the graphical desktop. Run automatically after
+# logging in on the first console; can also be run by hand.
+hudctl apply --no-reload
+
+export XDG_CURRENT_DESKTOP=labwc:wlroots
+export XDG_SESSION_TYPE=wayland
+export MOZ_ENABLE_WAYLAND=1
+export QT_QPA_PLATFORM="wayland;xcb"
+# Lets the desktop start on machines with no usable graphics chip
+# (virtual machines, mostly) by drawing on the processor instead.
+export WLR_RENDERER_ALLOW_SOFTWARE=1
+
+mkdir -p "$HOME/.cache"
+labwc > "$HOME/.cache/hud-session.log" 2>&1

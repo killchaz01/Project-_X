@@ -1,0 +1,52 @@
+<?xml version="1.0"?>
+<!-- Written by hudctl. Edit the template in a copy of the "windows" module
+     ({{hud_dir}}/modules/windows/) rather than this file. -->
+<labwc_config>
+  <core>
+    <gap>{{gap}}</gap>
+    <decoration>server</decoration>
+  </core>
+  <theme>
+    <cornerRadius>{{radius}}</cornerRadius>
+    <titlebar>
+      <layout>{{titlebar_layout}}</layout>
+      <showTitle>yes</showTitle>
+    </titlebar>
+    <font name="{{font_ui}}" size="{{font_size}}" weight="bold"/>
+    <dropShadows>{{window_shadows}}</dropShadows>
+  </theme>
+  <windowSwitcher show="yes" preview="yes" outlines="yes"/>
+  <keyboard>
+    <default/>
+    <!-- The Super key is Command on a Mac keyboard. -->
+    <keybind key="W-space"><action name="Execute" command="fuzzel"/></keybind>
+    <keybind key="W-Return"><action name="Execute" command="{{terminal}}"/></keybind>
+    <keybind key="W-q"><action name="Close"/></keybind>
+    <keybind key="W-w"><action name="Close"/></keybind>
+    <keybind key="W-m"><action name="Iconify"/></keybind>
+    <keybind key="W-h"><action name="Iconify"/></keybind>
+    <keybind key="W-Tab"><action name="NextWindow"/></keybind>
+    <keybind key="W-S-Tab"><action name="PreviousWindow"/></keybind>
+    <keybind key="W-C-f"><action name="ToggleFullscreen"/></keybind>
+    <keybind key="W-Up"><action name="ToggleMaximize"/></keybind>
+    <keybind key="W-C-q"><action name="Execute" command="swaylock -f"/></keybind>
+    <keybind key="W-comma"><action name="Execute" command="hud-menu settings"/></keybind>
+    <keybind key="W-S-3"><action name="Execute" command="hud-menu screenshot"/></keybind>
+    <keybind key="W-S-4"><action name="Execute" command="hud-menu screenshot-area"/></keybind>
+    <keybind key="Print"><action name="Execute" command="hud-menu screenshot"/></keybind>
+    <keybind key="XF86AudioRaiseVolume"><action name="Execute" command="wpctl set-volume -l 1.0 @DEFAULT_AUDIO_SINK@ 5%+"/></keybind>
+    <keybind key="XF86AudioLowerVolume"><action name="Execute" command="wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"/></keybind>
+    <keybind key="XF86AudioMute"><action name="Execute" command="wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"/></keybind>
+    <keybind key="XF86MonBrightnessUp"><action name="Execute" command="brightnessctl set 5%+"/></keybind>
+    <keybind key="XF86MonBrightnessDown"><action name="Execute" command="brightnessctl set 5%-"/></keybind>
+  </keyboard>
+  <mouse>
+    <default/>
+  </mouse>
+  <libinput>
+    <device category="touchpad">
+      <naturalScroll>{{natural_scroll}}</naturalScroll>
+      <tap>{{tap_to_click}}</tap>
+    </device>
+  </libinput>
+</labwc_config>

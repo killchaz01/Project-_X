@@ -1,0 +1,52 @@
+/* Written by hudctl from the active theme. */
+* {
+  font-family: "{{font_ui}}", sans-serif;
+  font-size: {{font_size}}pt;
+  font-weight: bold;
+  min-height: 0;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+window#waybar {
+  background: alpha({{bg}}, {{bar_opacity}});
+  color: {{text}};
+  border-{{bar_edge}}: 1px solid {{line}};
+}
+tooltip { background: {{panel}}; border: 1px solid {{title}}; border-radius: {{radius}}px; }
+tooltip label { color: {{title}}; font-family: "{{font_mono}}", monospace; font-weight: normal; }
+
+/* Every block is a thin outlined label. */
+.module {
+  margin: 4px 3px;
+  padding: 0 9px;
+  border: 1px solid {{line_dim}};
+  border-radius: {{radius}}px;
+  color: {{text}};
+  letter-spacing: 1px;
+}
+#custom-menu {
+  margin-left: 6px;
+  color: {{bg}};
+  background: {{title}};
+  border-color: {{title}};
+  box-shadow: 0 0 {{glow_px}}px alpha({{title}}, 0.6);
+  letter-spacing: 3px;
+}
+#custom-menu:hover { background: {{warn}}; border-color: {{warn}}; }
+#custom-title { border-color: transparent; color: {{line}}; text-shadow: 0 0 {{glow_px}}px alpha({{line}}, 0.7); }
+#clock {
+  margin-right: 6px;
+  color: {{title}};
+  border-color: {{title}};
+  font-family: "{{font_mono}}", monospace;
+  text-shadow: 0 0 {{glow_px}}px alpha({{title}}, 0.7);
+}
+#network, #wireplumber, #battery { color: {{line}}; border-color: {{line}}; }
+#cpu, #memory, #disk, #temperature { color: {{cyan}}; border-color: alpha({{cyan}}, 0.5); }
+#tray { border-color: transparent; }
+#network.disconnected, #wireplumber.muted { color: {{muted}}; border-color: {{muted}}; }
+#battery.warning { color: {{warn}}; border-color: {{warn}}; }
+#battery.critical, #temperature.critical {
+  color: {{bg}}; background: {{alert}}; border-color: {{alert}};
+}

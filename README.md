@@ -82,4 +82,4 @@ docs/                       App Store listing draft and privacy policy
 
 ---
 
-This repository also holds **Cyberdyne OS**, a separate Linux operating system project. See [cyberdyne-os/](cyberdyne-os/README.md).
+This repository also holds **Apsis OS** (working name), a separate Linux desktop operating system project. See [os/](os/README.md).

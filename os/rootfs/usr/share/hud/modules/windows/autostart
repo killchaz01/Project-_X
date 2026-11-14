@@ -1,0 +1,10 @@
+# Written by hudctl. Runs once when the desktop starts.
+if command -v gsettings >/dev/null; then
+    gsettings set org.gnome.desktop.interface color-scheme {{color_scheme}}
+    gsettings set org.gnome.desktop.interface icon-theme '{{icon_theme}}'
+    gsettings set org.gnome.desktop.wm.preferences button-layout '{{gtk_layout}}'
+    gsettings set org.gnome.desktop.interface font-name '{{font_ui}} {{font_size}}'
+    gsettings set org.gnome.desktop.interface monospace-font-name '{{font_mono}} {{font_size}}'
+fi
+command -v nm-applet >/dev/null && nm-applet --indicator &
+sh "{{hud_dir}}/autostart.sh"

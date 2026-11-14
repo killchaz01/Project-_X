@@ -1,0 +1,52 @@
+#!/bin/bash
+# hud - system scan: what this machine is and how it is doing.
+. /etc/os-release 2>/dev/null
+
+R=$'\e[1;32m'; A=$'\e[0;33m'; W=$'\e[0;32m'; D=$'\e[0;33m'; N=$'\e[0m'
+[ -t 1 ] || { R=; A=; W=; D=; N=; }
+
+row() { printf '  %s%-18s%s %s%s%s\n' "$D" "$1" "$N" "$W" "$2" "$N"; }
+
+cpu=$(awk -F': ' '/^model name/ {print $2; exit}' /proc/cpuinfo)
+cores=$(nproc 2>/dev/null)
+mem=$(awk '/^MemTotal/ {t=$2} /^MemAvailable/ {a=$2}
+           END {printf "%d MB USED / %d MB", (t-a)/1024, t/1024}' /proc/meminfo)
+disk=$(df -h --output=used,size,pcent / 2>/dev/null |
+       awk 'NR==2 {printf "%s USED / %s (%s)", $1, $2, $3}')
+up=$(awk '{s=int($1); printf "%dD %02dH %02dM", s/86400, s%86400/3600, s%3600/60}' /proc/uptime)
+load=$(cut -d' ' -f1-3 /proc/loadavg)
+net=$(ip -4 -o addr show scope global 2>/dev/null |
+      awk '{printf "%s%s %s", sep, $2, $4; sep=", "}')
+bat=
+for b in /sys/class/power_supply/BAT*; do
+    [ -r "$b/capacity" ] && bat="$(cat "$b/capacity")% $(tr a-z A-Z < "$b/status")"
+done
+failed=$(systemctl --failed --no-legend 2>/dev/null | grep -c .)
+
+cat <<BANNER
+
+${A}     _.---._
+   .'   .   '.      ${R}$(printf '%s' "${NAME:-HUD}" | tr a-z A-Z | sed 's/./& /g')${A}
+  (    (O)    )--o  ORBITAL DESKTOP SYSTEM
+   '._  '  _.'      ${VERSION:-}
+      '---'${N}
+
+  ${A}SYSTEM SCAN ................................ COMPLETE${N}
+
+BANNER
+row "UNIT"            "$(hostname)"
+row "OPERATOR"        "$(id -un)"
+row "KERNEL"          "$(uname -sr)"
+row "PROCESSOR"       "${cpu:-UNKNOWN} x${cores:-?}"
+row "MEMORY"          "$mem"
+row "STORAGE /"       "${disk:-UNKNOWN}"
+row "UPTIME"          "$up"
+row "LOAD"            "$load"
+row "NETWORK"         "${net:-NO LINK}"
+[ -n "$bat" ] && row "POWER" "$bat"
+if [ "${failed:-0}" -eq 0 ]; then
+    row "STATUS" "ALL SERVICES NOMINAL"
+else
+    row "STATUS" "$failed FAILED SERVICE(S): systemctl --failed"
+fi
+echo
