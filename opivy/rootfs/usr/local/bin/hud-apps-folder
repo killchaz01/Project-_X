@@ -1,0 +1,44 @@
+#!/usr/bin/env python3
+"""hud-apps-folder - keep ~/Applications up to date, like the Mac's Applications folder.
+
+Every app that has a launcher file (.desktop) gets a link in ~/Applications.
+Open the folder in Files (the sidebar entry "Applications") and double-click
+an app to start it. Links are removed when an app is uninstalled.
+"""
+import os
+import sys
+
+sys.path.insert(0, "/usr/share/hud/lib")
+import hudapps  # noqa: E402
+
+FOLDER = os.path.join(hudapps.HOME, "Applications")
+
+
+def main():
+    os.makedirs(FOLDER, exist_ok=True)
+    wanted = {}
+    apps = hudapps.desktop_entries()
+    for app in apps:
+        if app["hidden"] or not app["exec"]:
+            continue
+        name = hudapps.app_name(app["id"], apps).replace("/", "-")
+        source = os.path.join(app["folder"], app["id"] + ".desktop")
+        wanted.setdefault(name, source)
+    for name, source in wanted.items():
+        link = os.path.join(FOLDER, name + ".desktop")
+        if os.path.islink(link) and os.readlink(link) == source:
+            continue
+        if os.path.lexists(link):
+            os.remove(link)
+        os.symlink(source, link)
+    for entry in os.listdir(FOLDER):
+        path = os.path.join(FOLDER, entry)
+        if os.path.islink(path) and not os.path.exists(path):
+            os.remove(path)
+        elif entry.endswith(".desktop") and entry[:-8] not in wanted:
+            if os.path.islink(path):
+                os.remove(path)
+
+
+if __name__ == "__main__":
+    main()

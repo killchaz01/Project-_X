@@ -34,7 +34,7 @@ def desktop_entries():
                             info[k] = val
             except OSError:
                 continue
-            apps.append({"id": info["id"], "name": info.get("Name", info["id"]),
+            apps.append({"id": info["id"], "folder": folder, "name": info.get("Name", info["id"]),
                          "exec": info.get("Exec", ""), "icon": info.get("Icon", ""),
                          "wmclass": info.get("StartupWMClass", ""), "hidden": info.get("NoDisplay") == "true"})
     return apps
