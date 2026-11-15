@@ -1,0 +1,78 @@
+/* Written by hudctl from the active theme. */
+@define-color accent_color {{title}};
+@define-color accent_bg_color {{line}};
+@define-color accent_fg_color {{bg}};
+@define-color window_bg_color {{bg}};
+@define-color window_fg_color {{text}};
+@define-color view_bg_color {{panel}};
+@define-color view_fg_color {{text}};
+@define-color headerbar_bg_color {{panel}};
+@define-color headerbar_fg_color {{text}};
+@define-color sidebar_bg_color {{bg_alt}};
+@define-color sidebar_fg_color {{text}};
+@define-color card_bg_color {{panel}};
+@define-color popover_bg_color {{panel}};
+@define-color popover_fg_color {{text}};
+@define-color dialog_bg_color {{panel}};
+@define-color dialog_fg_color {{text}};
+
+window, dialog, .background { background-color: {{bg}}; color: {{text}}; }
+headerbar, .titlebar, menubar, toolbar, .toolbar, actionbar, statusbar {
+  background-image: none; background-color: {{panel}}; color: {{text}};
+  border-color: {{line_dim}}; box-shadow: none; text-shadow: none;
+}
+headerbar .title, .titlebar .title { color: {{title}}; }
+button {
+  color: {{text}}; box-shadow: none; text-shadow: none; padding: 0 6px; min-height: 18px;
+  {{frame_button_line_dim}}
+}
+button:hover { color: {{line}}; {{frame_button_line}} }
+button:active, button:checked { color: {{bg}}; {{frame_button_line_fill}} }
+button.suggested-action { color: {{title}}; {{frame_button_title}} }
+button.suggested-action:hover { color: {{bg}}; {{frame_button_title_fill}} }
+button.destructive-action { color: {{alert}}; {{frame_button_alert}} }
+/* Small built-in buttons keep a plain outline. */
+button.titlebutton, spinbutton button, combobox button, scrollbar button, treeview button,
+notebook button, entry button, switch, button.flat, button.color, colorswatch {
+  border-image: none; background-color: {{panel}}; padding: 2px 6px; min-height: 0;
+  border: {{border_width}}px solid {{line_dim}}; border-radius: {{radius}}px;
+}
+switch { border-radius: 14px; }
+switch:checked { background-color: {{title}}; border-color: {{title}}; }
+switch slider { background-color: {{line}}; border-radius: 14px; border: none; min-width: 20px; min-height: 20px; }
+entry, spinbutton {
+  background-image: none; background-color: {{panel}}; color: {{title}};
+  border: {{border_width}}px solid {{line_dim}}; border-radius: {{radius}}px; box-shadow: none;
+  caret-color: {{title}};
+}
+entry:focus { border-color: {{title}}; box-shadow: 0 0 {{glow_px}}px alpha({{title}}, 0.6); }
+.view, textview, textview text, treeview, iconview, list, listview, row {
+  background-color: {{panel}}; color: {{text}};
+}
+treeview header button { border-radius: 0; border-color: {{line_dim}}; color: {{line}}; }
+.sidebar, .sidebar .view, .sidebar row, placessidebar, placessidebar list {
+  background-color: {{bg_alt}}; color: {{text}};
+}
+*:selected, selection, row:selected, .view:selected, treeview:selected, iconview:selected {
+  background-color: {{line}}; color: {{bg}};
+}
+menu, .menu, popover, popover.background, .popup {
+  background-color: {{panel}}; color: {{text}}; border: {{border_width}}px solid {{line}};
+  border-radius: {{radius}}px; box-shadow: 0 0 {{glow_px}}px alpha({{line}}, 0.5);
+}
+menuitem:hover, modelbutton:hover { background-color: {{line}}; color: {{bg}}; }
+separator { background-color: {{line_dim}}; min-height: 1px; min-width: 1px; }
+scrollbar { background-color: transparent; border: none; }
+scrollbar slider { background-color: {{line_dim}}; border-radius: {{radius}}px; min-width: 6px; min-height: 6px; }
+scrollbar slider:hover { background-color: {{line}}; }
+notebook, notebook stack, stack, viewport, scrolledwindow, frame, box.dialog-vbox, .dialog-vbox {
+  background-color: {{bg}}; color: {{text}};
+}
+notebook header { background-color: {{bg}}; border-color: {{line_dim}}; }
+notebook tab { color: {{muted}}; }
+notebook tab:checked { color: {{title}}; box-shadow: inset 0 -2px {{title}}; }
+progressbar progress, scale highlight { background-color: {{title}}; background-image: none; border: none; }
+progressbar trough, scale trough { background-color: {{bg_alt}}; border: 1px solid {{line_dim}}; }
+check, radio { background-image: none; background-color: {{panel}}; border: 1px solid {{line}}; color: {{title}}; }
+tooltip, tooltip.background { background-color: {{panel}}; border: 1px solid {{title}}; border-radius: {{radius}}px; }
+tooltip label { color: {{title}}; }

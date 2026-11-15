@@ -1,0 +1,96 @@
+#!/bin/bash
+# hud-menu - the system menu (the button at the left of the menu bar),
+# plus small helper actions used by keyboard shortcuts and the bar.
+#
+#   hud-menu                  show the system menu
+#   hud-menu theme            pick a theme
+#   hud-menu settings         open your settings file in the editor
+#   hud-menu screenshot       save the whole screen to ~/Pictures
+#   hud-menu screenshot-area  drag to choose what to save
+#   hud-menu title            print the focused window's title (for the bar)
+#   hud-menu alerts           print whether notifications are on (for the bar)
+#   hud-menu alerts-toggle    switch notifications on or off
+#   hud-menu bluetooth        switch Bluetooth on or off
+#   hud-menu power            lock, log out, restart, shut down
+set -u
+CONF="${XDG_CONFIG_HOME:-$HOME/.config}/hud"
+
+pick() { fuzzel --dmenu --prompt "$1 > " --lines "${2:-10}" --width 34; }
+
+shot() {
+    local dir file
+    dir=$(xdg-user-dir PICTURES 2>/dev/null || echo "$HOME/Pictures")
+    mkdir -p "$dir"
+    file="$dir/Screenshot $(date '+%Y-%m-%d at %H.%M.%S').png"
+    if [ "$1" = area ]; then
+        grim -g "$(slurp)" "$file" || return
+    else
+        grim "$file" || return
+    fi
+    notify-send "Screenshot saved" "$file"
+}
+
+case "${1:-}" in
+title)
+    wlrctl toplevel list state:focused 2>/dev/null | head -1 | sed 's/^[^:]*: //' | cut -c1-22 | tr a-z A-Z
+    ;;
+alerts)
+    if makoctl mode 2>/dev/null | grep -q do-not-disturb; then
+        printf '{"text":"ALERTS OFF","class":"off"}\n'
+    else
+        printf '{"text":"ALERTS ON","class":"on"}\n'
+    fi
+    ;;
+alerts-toggle)
+    makoctl mode -t do-not-disturb > /dev/null
+    pkill -RTMIN+8 waybar
+    ;;
+bluetooth)
+    if rfkill list bluetooth 2>/dev/null | grep -q "Soft blocked: yes"; then
+        rfkill unblock bluetooth; bluetoothctl power on > /dev/null 2>&1
+    else
+        bluetoothctl power off > /dev/null 2>&1; rfkill block bluetooth
+    fi
+    ;;
+power)
+    choice=$(printf '%s\n' "Lock Screen" "Log Out" "Restart" "Shut Down" | pick POWER 4)
+    case "$choice" in
+        Lock*)   swaylock -f ;;
+        Log*)    labwc --exit ;;
+        Restart) systemctl reboot ;;
+        Shut*)   systemctl poweroff ;;
+    esac
+    ;;
+theme)
+    choice=$(hudctl theme | sed 's/^[* ] //' | pick THEME 6 | awk '{print $1}')
+    [ -n "$choice" ] && hudctl theme "$choice"
+    ;;
+settings)
+    [ -f "$CONF/settings.conf" ] || hudctl get > /dev/null
+    { echo "# All settings and their current values. To change one, run"
+      echo "#   hudctl set KEY VALUE"
+      echo "# in a terminal, or add a line 'KEY = VALUE' to settings.conf"
+      echo "# and run: hudctl apply"; echo; hudctl get; } > "$CONF/all-settings.txt"
+    touch "$CONF/settings.conf"
+    mousepad "$CONF/settings.conf" "$CONF/all-settings.txt" &
+    ;;
+screenshot)      shot full ;;
+screenshot-area) shot area ;;
+"")
+    choice=$(printf '%s\n' "About This Computer" "Application Center" "Control Center" \
+        "Change Theme" "Settings File" "Lock Screen" "Log Out" "Restart" "Shut Down" | pick SYSTEM 9)
+    case "$choice" in
+        About*)   foot -H hud ;;
+        Application*) hud-center apps ;;
+        Control*) hud-center prefs ;;
+        Change*)  exec "$0" theme ;;
+        Settings*) exec "$0" settings ;;
+        Lock*)    swaylock -f ;;
+        Log*)     labwc --exit ;;
+        Restart)  systemctl reboot ;;
+        Shut*)    systemctl poweroff ;;
+    esac
+    ;;
+*)
+    sed -n '2,14s/^# \{0,1\}//p' "$0"; exit 1 ;;
+esac

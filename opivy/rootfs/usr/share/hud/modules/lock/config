@@ -1,0 +1,21 @@
+# Written by hudctl from the active theme.
+color={{bg_hex}}
+font={{font_ui}}
+indicator-radius=90
+indicator-thickness=6
+inside-color={{panel_hex}}
+ring-color={{line_hex}}
+line-color={{bg_hex}}
+text-color={{title_hex}}
+key-hl-color={{title_hex}}
+bs-hl-color={{alert_hex}}
+separator-color={{bg_hex}}
+inside-ver-color={{panel_hex}}
+ring-ver-color={{title_hex}}
+text-ver-color={{title_hex}}
+inside-wrong-color={{panel_hex}}
+ring-wrong-color={{alert_hex}}
+text-wrong-color={{alert_hex}}
+inside-clear-color={{panel_hex}}
+ring-clear-color={{warn_hex}}
+text-clear-color={{warn_hex}}

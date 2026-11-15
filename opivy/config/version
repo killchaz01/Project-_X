@@ -1,0 +1,8 @@
+# Release identity. Sourced by build.sh. Changing the name here renames
+# the whole system: boot menu, login banner, menu bar, wallpaper, ISO file.
+OS_NAME="Op Ivy"
+OS_ID="opivy"
+OS_VERSION="0.1"
+OS_CODENAME="Standing By"
+# Theme whose colours are used for the text console and boot messages.
+CONSOLE_THEME="station"

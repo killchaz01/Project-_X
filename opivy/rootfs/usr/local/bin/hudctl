@@ -1,0 +1,486 @@
+#!/usr/bin/env python3
+"""hudctl - control the desktop's look, layout and modules.
+
+  hudctl apply                 rebuild all config files and reload the desktop
+  hudctl theme                 list themes
+  hudctl theme NAME            switch theme
+  hudctl get [KEY]             show one setting, or all of them
+  hudctl set KEY VALUE         change a setting (colour, font, layout, ...)
+  hudctl unset KEY             go back to the default for a setting
+  hudctl module                list modules and whether they are on
+  hudctl module on|off NAME    switch a module on or off
+
+How it works: settings are plain "key = value" text. Three layers are
+merged, later ones winning:
+
+  /usr/share/hud/defaults.conf        layout, fonts, sizes
+  themes/THEME.conf                   colours
+  ~/.config/hud/settings.conf         your changes
+
+Each module in /usr/share/hud/modules/ (or ~/.config/hud/modules/) is a
+folder of template files. "apply" fills every {{key}} in the templates
+with the merged settings and writes the results where the programs
+expect them. To add your own theme, put NAME.conf in ~/.config/hud/themes/.
+"""
+import json
+import os
+import re
+import shlex
+import subprocess
+import sys
+
+SYS = "/usr/share/hud"
+# Marker glyphs used on the bar and dock: two split squares and a checker.
+MARKS = ("\u25e9", "\u25ea")
+CHECK = "\u259a"
+HOME = os.path.expanduser("~")
+USER = os.path.join(os.environ.get("XDG_CONFIG_HOME", HOME + "/.config"), "hud")
+SETTINGS = os.path.join(USER, "settings.conf")
+
+
+def die(msg):
+    sys.exit("hudctl: " + msg)
+
+
+def read_conf(path):
+    """Parse 'key = value' lines. Returns a list of pairs (keys may repeat)."""
+    pairs = []
+    try:
+        with open(path) as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, value = line.split("=", 1)
+                pairs.append((key.strip(), value.strip()))
+    except FileNotFoundError:
+        pass
+    return pairs
+
+
+def write_settings(settings):
+    os.makedirs(USER, exist_ok=True)
+    with open(SETTINGS, "w") as f:
+        f.write("# Your changes. Edit by hand or with: hudctl set KEY VALUE\n")
+        for key, value in settings.items():
+            f.write(f"{key} = {value}\n")
+
+
+def find_dirs(kind):
+    """Map name -> path for themes or modules; the user's copies win."""
+    found = {}
+    for base in (SYS, USER):
+        d = os.path.join(base, kind)
+        if not os.path.isdir(d):
+            continue
+        for entry in sorted(os.listdir(d)):
+            path = os.path.join(d, entry)
+            if kind == "themes" and entry.endswith(".conf"):
+                found[entry[:-5]] = path
+            elif kind == "modules" and os.path.isfile(os.path.join(path, "module.conf")):
+                found[entry] = path
+    return found
+
+
+def os_name():
+    for key, value in read_conf("/etc/os-release"):
+        if key == "NAME":
+            return value.strip('"')
+    return "HUD"
+
+
+def load():
+    """Return (merged settings, user settings)."""
+    user = dict(read_conf(SETTINGS))
+    merged = dict(read_conf(os.path.join(SYS, "defaults.conf")))
+    theme = user.get("theme", "station")
+    themes = find_dirs("themes")
+    if theme not in themes:
+        print(f"hudctl: theme '{theme}' not found, using station", file=sys.stderr)
+        theme = "station"
+    merged.update(read_conf(themes[theme]))
+    merged.update(user)
+    merged["theme"] = theme
+    return merged, user
+
+
+def derive(v):
+    """Add values worked out from the settings, for templates to use."""
+    v["home"] = HOME
+    v["hud_dir"] = USER
+    v["os_name"] = os_name()
+    if not v.get("logo_text"):
+        v["logo_text"] = v["os_name"].upper().replace(" OS", "")
+
+    left = v.get("window_buttons", "left") == "left"
+    v["titlebar_layout"] = "close,iconify,max:" if left else ":iconify,max,close"
+    v["gtk_layout"] = "close,minimize,maximize:" if left else ":minimize,maximize,close"
+
+    vertical = v.get("dock_position") in ("left", "right")
+    v["bar_edge"] = "top" if v.get("bar_position") == "bottom" else "bottom"
+    dark = v.get("scheme", "dark") != "light"
+    v["prefer_dark"] = "1" if dark else "0"
+    v["color_scheme"] = "prefer-dark" if dark else "prefer-light"
+    strength = int(v.get("glow_strength", "2") or 0) if v.get("glow") == "yes" else 0
+    v["glow_px"] = str((0, 5, 9, 14)[max(0, min(3, strength))])
+    v["glow_wide"] = str(int(v["glow_px"]) * 2)
+    block = str(int(v.get("bar_height", "34")) - 4)
+    for ctx in ("menu", "hardware", "prefs", "clock"):
+        v["height_" + ctx] = block
+    numbered = v.get("dock_numbers") == "yes"
+    v["height_dock"] = "58" if numbered else "46"
+    v["tile_w_dock"], v["tile_h_dock"] = "84", "74"
+    v["current_theme"] = v["theme"].upper()
+
+    v["mark_a"], v["mark_b"], v["mark_check"] = MARKS[0], MARKS[1], CHECK
+
+    # Dock: turn "LABEL:command" entries into waybar custom modules.
+    names, mods = [], {}
+    for i, item in enumerate(filter(None, (s.strip() for s in v.get("dock_apps", "").split(",")))):
+        label, _, command = item.partition(":")
+        name = f"custom/pin{i}"
+        names.append(name)
+        text = label.strip()
+        if numbered:    # split-square marker and a tile number above the label
+            text = f"{MARKS[i % 2]} {i + 1:02d}\n{text}"
+        mods[name] = {"format": text, "on-click": command.strip() or label.strip().lower(),
+                      "tooltip": False, "justify": "center"}
+    # CSS selectors for the pinned tiles (and for the pointer being on one).
+    ids = [n.replace("custom/", "#custom-") for n in names] or ["#custom-none"]
+    v["dock_pin_css"] = ", ".join(ids)
+    v["dock_pin_hover_css"] = ", ".join(i + ":hover" for i in ids)
+    v["dock_modules"] = json.dumps(names + ["wlr/taskbar"])
+    v["dock_pins"] = json.dumps(mods, indent=2)[1:-1].strip()
+    if v["dock_pins"]:
+        v["dock_pins"] += ","
+    v["dock_layout"] = "vertical" if vertical else "horizontal"
+
+    if v.get("wallpaper", "generated") == "generated":
+        v["wallpaper_path"] = os.path.join(USER, "wallpaper.png")
+    else:
+        v["wallpaper_path"] = os.path.expanduser(v["wallpaper"])
+    return v
+
+
+# ---------------------------------------------------------------- shapes
+# Frames are small SVG pictures drawn in the theme colours and stretched by
+# the toolkit, which is how blocks get shapes plain CSS cannot make.
+SHAPES = ("square", "octagon", "round", "cut", "tab", "hex", "slant", "pill", "bracket", "hexagon")
+
+
+def shape_points(shape, x0, y0, x1, y1, c):
+    """Outline of a shape inside the box x0,y0..x1,y1; c is the corner size."""
+    cy, h = (y0 + y1) / 2, y1 - y0
+    if shape == "square":
+        return [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
+    if shape == "octagon":      # like "cut", but the corner size is fixed
+        c = h * 0.3
+        shape = "cut"
+    if shape == "cut":
+        return [(x0 + c, y0), (x1 - c, y0), (x1, y0 + c), (x1, y1 - c),
+                (x1 - c, y1), (x0 + c, y1), (x0, y1 - c), (x0, y0 + c)]
+    if shape == "tab":
+        return [(x0 + c, y0), (x1, y0), (x1, y1 - c), (x1 - c, y1), (x0, y1), (x0, y0 + c)]
+    if shape == "hex":
+        e = h * 0.36
+        return [(x0 + e, y0), (x1 - e, y0), (x1, cy), (x1 - e, y1), (x0 + e, y1), (x0, cy)]
+    if shape == "hexagon":
+        e = (x1 - x0) / 4
+        return [(x0 + e, y0), (x1 - e, y0), (x1, cy), (x1 - e, y1), (x0 + e, y1), (x0, cy)]
+    if shape == "slant":
+        e = h * 0.42
+        return [(x0 + e, y0), (x1, y0), (x1 - e, y1), (x0, y1)]
+    return None
+
+
+def shape_svg(shape, w, h, colour, fill, fill_opacity, stroke, glow, radius):
+    """One frame as SVG text. A margin is left around it for the glow."""
+    g = 2 + glow
+    x0, y0, x1, y1 = g, g, w - g, h - g
+    c = max(2, min(radius, (y1 - y0) * 0.32))
+    pts = shape_points(shape, x0, y0, x1, y1, c)
+    style = (f'fill="{fill}" fill-opacity="{fill_opacity}" stroke="{colour}" '
+             f'stroke-width="{stroke}" stroke-linejoin="miter"')
+    if pts:
+        body = '<path d="M' + "L".join(f"{x:.1f},{y:.1f}" for x, y in pts) + f'Z" {style}/>'
+    elif shape == "bracket":
+        k = c + 3
+        body = (f'<rect x="{x0}" y="{y0}" width="{x1 - x0}" height="{y1 - y0}" fill="{fill}" '
+                f'fill-opacity="{fill_opacity}"/>'
+                f'<path d="M{x0},{y0 + k}V{y0}H{x0 + k}M{x1 - k},{y0}H{x1}V{y0 + k}'
+                f'M{x1},{y1 - k}V{y1}H{x1 - k}M{x0 + k},{y1}H{x0}V{y1 - k}" fill="none" '
+                f'stroke="{colour}" stroke-width="{stroke}" stroke-linecap="square"/>')
+    else:
+        r = (y1 - y0) / 2 if shape == "pill" else c
+        body = f'<rect x="{x0}" y="{y0}" width="{x1 - x0}" height="{y1 - y0}" rx="{r}" {style}/>'
+    blur = ""
+    if glow:
+        blur = (f'<filter id="g" x="-30%" y="-30%" width="160%" height="160%">'
+                f'<feGaussianBlur stdDeviation="{glow * 0.55:.1f}" result="b"/>'
+                f'<feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/>'
+                f'</feMerge></filter>')
+        body = f'<g filter="url(#g)">{body}</g>'
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" '
+            f'viewBox="0 0 {w} {h}">{blur}{body}</svg>')
+
+
+def frame_css(v, ctx, colour_key, filled):
+    """CSS that gives a block the shape chosen for its group (shape_CTX).
+
+    Blocks with a known height (height_CTX) get a picture cut in three
+    across; others get one cut in nine so it stretches both ways.
+    """
+    shape = v.get("shape_" + ctx, "round")
+    if shape not in SHAPES:
+        shape = "round"
+    colour = v[colour_key]
+    stroke = float(v.get("border_width", "2"))
+    glow = int(v["glow_px"]) // 3
+    radius = float(v.get("radius", "8"))
+    fill = colour if filled else v["panel"]
+    opacity = 1 if filled else 0.82
+    height = int(v.get("height_" + ctx, "0"))
+    g = 2 + glow
+
+    folder = os.path.join(USER, "shapes")
+    os.makedirs(folder, exist_ok=True)
+    name = f"{ctx}-{colour_key}{'-fill' if filled else ''}.svg"
+    path = os.path.join(folder, name)
+
+    if shape == "hexagon" and "tile_w_" + ctx in v:
+        w, h = int(v["tile_w_" + ctx]), int(v["tile_h_" + ctx])
+        svg = shape_svg(shape, w, h, colour, fill, opacity, stroke, glow, radius)
+        css = (f'background: url("{path}") center / {w}px {h}px no-repeat; border: none; '
+               f'min-width: {w}px; min-height: {h}px; padding: 0;')
+    elif height:
+        if shape == "hexagon":
+            shape = "hex"
+        if shape in ("hex", "slant", "pill"):
+            edge = int(height / 2) + 2
+        elif shape == "octagon":
+            edge = int(height * 0.3) + g + 2
+        else:
+            edge = int(radius) + g + 2
+        w = edge * 2 + 12
+        svg = shape_svg(shape, w, height, colour, fill, opacity, stroke, glow, radius)
+        # The ends come from the picture's left and right slices; the
+        # stretch between them is a second picture of just the middle.
+        mid = path[:-4] + "-mid.svg"
+        with open(mid, "w") as f:
+            f.write(svg.replace(f'width="{w}" height="{height}" viewBox="0 0 {w} {height}"',
+                                f'width="12" height="{height}" viewBox="{edge} 0 12 {height}" '
+                                f'preserveAspectRatio="none"'))
+        inner = 6 if shape == "slant" else max(0, 9 - edge // 2)
+        css = (f'background: url("{mid}") center / 100% 100% no-repeat; '
+               f'border-style: solid; border-color: transparent; border-width: 0 {edge}px; '
+               f'border-image: url("{path}") 0 {edge} / 0 {edge}px stretch; '
+               f'min-height: {height}px; padding: 0 {inner}px;')
+    else:
+        if shape in ("hex", "slant", "pill", "hexagon", "octagon"):
+            shape = "cut"
+        edge = int(min(radius, 8)) + g + 1
+        w = edge * 3
+        svg = shape_svg(shape, w, w, colour, fill, opacity, stroke, glow, min(radius, 8))
+        # The picture supplies the outline; the middle is a plain colour
+        # kept inside the outline by clipping it to the padding box.
+        r, gr, b = (int(fill.lstrip("#")[i:i + 2], 16) for i in (0, 2, 4))
+        css = (f'background-image: none; background-color: rgba({r},{gr},{b},{opacity}); '
+               f'background-clip: padding-box; border-style: solid; '
+               f'border-color: transparent; border-width: {edge}px; '
+               f'border-image: url("{path}") {edge} / {edge}px stretch;')
+    with open(path, "w") as f:
+        f.write(svg)
+    return css
+
+
+def lookup(v, key):
+    """Resolve {{key}} with optional suffix: _hex (no #), _rgb, _json."""
+    if key in v:
+        return v[key]
+    m = re.fullmatch(r"frame_([a-z]+)_([a-z_]+?)(_fill)?", key)
+    if m and m.group(2) in v:
+        return frame_css(v, m.group(1), m.group(2), bool(m.group(3)))
+    for suffix in ("_hex", "_rgb", "_json"):
+        if key.endswith(suffix) and key[: -len(suffix)] in v:
+            raw = v[key[: -len(suffix)]]
+            if suffix == "_json":
+                return json.dumps([s.strip() for s in raw.split(",") if s.strip()])
+            h = raw.lstrip("#")
+            if suffix == "_hex":
+                return h
+            return ",".join(str(int(h[i:i + 2], 16)) for i in (0, 2, 4))
+    return None
+
+
+def render(text, v, where):
+    def sub(m):
+        value = lookup(v, m.group(1))
+        if value is None:
+            print(f"hudctl: {where}: unknown setting {{{{{m.group(1)}}}}}", file=sys.stderr)
+            return ""
+        return value
+    return re.sub(r"\{\{([a-z0-9_]+)\}\}", sub, text)
+
+
+def module_enabled(name, conf, user):
+    state = user.get("module." + name)
+    if state:
+        return state == "on"
+    return dict(conf).get("default", "on") == "on"
+
+
+def in_session():
+    return bool(os.environ.get("WAYLAND_DISPLAY"))
+
+
+def sh(command, wait=True):
+    if wait:
+        subprocess.run(command, shell=True)
+    else:
+        subprocess.Popen(command, shell=True, start_new_session=True,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def apply(reload=True):
+    v, user = load()
+    derive(v)
+    os.makedirs(USER, exist_ok=True)
+    with open(os.path.join(USER, "resolved.json"), "w") as f:
+        json.dump(v, f, indent=1, sort_keys=True)
+
+    autostart = ["#!/bin/sh", "# Written by hudctl apply. Starts the enabled modules."]
+    restart = []
+    for name, path in find_dirs("modules").items():
+        conf = read_conf(os.path.join(path, "module.conf"))
+        c = dict(conf)
+        on = module_enabled(name, conf, user)
+        match = c.get("match")
+        if match and reload and in_session():
+            sh("pkill -f -- " + shlex.quote(render(match, v, name)))
+        if not on:
+            continue
+        for key, value in conf:
+            if key != "file":
+                continue
+            src, _, dest = (s.strip() for s in value.partition("->"))
+            dest = os.path.expanduser(render(dest, v, name))
+            os.makedirs(os.path.dirname(dest), exist_ok=True)
+            with open(os.path.join(path, src)) as f:
+                out = render(f.read(), v, f"{name}/{src}")
+            with open(dest, "w") as f:
+                f.write(out)
+            if c.get("mode") == "exec":
+                os.chmod(dest, 0o755)
+        if "run" in c:
+            sh(render(c["run"], v, name))
+        if "start" in c:
+            command = render(c["start"], v, name)
+            autostart.append(command + " &")
+            restart.append(command)
+
+    script = os.path.join(USER, "autostart.sh")
+    with open(script, "w") as f:
+        f.write("\n".join(autostart) + "\n")
+    os.chmod(script, 0o755)
+
+    if reload and in_session():
+        sh("labwc --reconfigure")
+        for command in restart:
+            sh(command, wait=False)
+
+
+def cmd_theme(args):
+    themes = find_dirs("themes")
+    if not args:
+        current = load()[0]["theme"]
+        for name, path in themes.items():
+            desc = dict(read_conf(path)).get("description", "")
+            print(f"{'*' if name == current else ' '} {name:12} {desc}")
+        return
+    if args[0] not in themes:
+        die(f"no theme called '{args[0]}'. Try: hudctl theme")
+    user = dict(read_conf(SETTINGS))
+    user["theme"] = args[0]
+    write_settings(user)
+    apply()
+
+
+def cmd_set(args):
+    if len(args) < 2:
+        die("usage: hudctl set KEY VALUE")
+    key, value = args[0], " ".join(args[1:])
+    merged, user = load()
+    if key not in merged and not key.startswith("module."):
+        die(f"unknown setting '{key}'. See: hudctl get")
+    if re.fullmatch(r"#?[0-9a-fA-F]{6}", value) and merged.get(key, "").startswith("#"):
+        value = "#" + value.lstrip("#").lower()
+    user[key] = value
+    write_settings(user)
+    apply()
+
+
+def cmd_unset(args):
+    if not args:
+        die("usage: hudctl unset KEY")
+    user = dict(read_conf(SETTINGS))
+    if user.pop(args[0], None) is None:
+        die(f"'{args[0]}' is not changed from its default")
+    write_settings(user)
+    apply()
+
+
+def cmd_get(args):
+    merged, user = load()
+    if args:
+        if args[0] not in merged:
+            die(f"unknown setting '{args[0]}'")
+        print(merged[args[0]])
+        return
+    for key in sorted(merged):
+        mark = "*" if key in user else " "
+        print(f"{mark} {key:16} {merged[key]}")
+    print("\n* = changed by you")
+
+
+def cmd_module(args):
+    modules = find_dirs("modules")
+    user = dict(read_conf(SETTINGS))
+    if not args:
+        for name, path in modules.items():
+            conf = read_conf(os.path.join(path, "module.conf"))
+            state = "on " if module_enabled(name, conf, user) else "off"
+            print(f"{state} {name:12} {dict(conf).get('description', '')}")
+        return
+    if len(args) != 2 or args[0] not in ("on", "off"):
+        die("usage: hudctl module on|off NAME")
+    if args[1] not in modules:
+        die(f"no module called '{args[1]}'. Try: hudctl module")
+    user["module." + args[1]] = args[0]
+    write_settings(user)
+    apply()
+
+
+def main():
+    args = sys.argv[1:]
+    if not args or args[0] in ("-h", "--help", "help"):
+        print(__doc__.strip())
+        return
+    command, rest = args[0], args[1:]
+    if command == "apply":
+        apply(reload="--no-reload" not in rest)
+    elif command == "theme":
+        cmd_theme(rest)
+    elif command == "set":
+        cmd_set(rest)
+    elif command == "unset":
+        cmd_unset(rest)
+    elif command == "get":
+        cmd_get(rest)
+    elif command == "module":
+        cmd_module(rest)
+    else:
+        die(f"unknown command '{command}'. Try: hudctl help")
+
+
+if __name__ == "__main__":
+    main()

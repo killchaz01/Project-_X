@@ -1,0 +1,90 @@
+#!/usr/bin/env python3
+"""hud-icons - draw folder and file icons in the active theme's colours.
+
+Writes a small icon set called HUD to ~/.local/share/icons/HUD. It only
+holds folders, the trash and plain files; every other icon comes from the
+set named by the "icon_base" setting.
+"""
+import json
+import os
+
+USER = os.path.join(os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")), "hud")
+OUT = os.path.join(os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share")), "icons", "HUD")
+
+with open(os.path.join(USER, "resolved.json")) as f:
+    v = json.load(f)
+sw = max(2.5, float(v.get("border_width", "2")) + 1)
+
+
+def svg(body):
+    return ('<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">'
+            f'{body}</svg>')
+
+
+def folder(code, colour):
+    """A square plate with a lit tab, a split-square marker and a short code."""
+    body = (f'<path d="M5 12H27V18H59V56H5Z" fill="{v["panel"]}" fill-opacity="0.92" '
+            f'stroke="{colour}" stroke-width="{sw}" stroke-linejoin="miter"/>'
+            f'<path d="M5 12H27V18H5Z" fill="{colour}"/>'
+            f'<path d="M51 24V32H43Z" fill="{colour}"/>'
+            f'<rect x="43" y="24" width="8" height="8" fill="none" stroke="{colour}" stroke-width="1.2"/>')
+    if code:
+        body += (f'<text x="11" y="49" font-family="{v["font_ui"]}, sans-serif" '
+                 f'font-weight="bold" font-size="{11 if len(code) > 3 else 13}" fill="{colour}">{code}</text>')
+    else:
+        body += f'<path d="M11 44H37M11 49H29" stroke="{colour}" stroke-width="2.5"/>'
+    return svg(body)
+
+
+def sheet(colour):
+    """A page with a checkerboard register mark, for plain files."""
+    marks = "".join(f'<rect x="{38 + 4 * i}" y="{12 + 4 * j}" width="4" height="4" fill="{colour}"/>'
+                    for i in range(3) for j in range(3) if (i + j) % 2 == 0)
+    return svg(f'<path d="M12 6H52V58H12Z" fill="{v["panel"]}" fill-opacity="0.92" stroke="{colour}" '
+               f'stroke-width="{sw}" stroke-linejoin="miter"/>{marks}'
+               f'<path d="M18 16H32" stroke="{colour}" stroke-width="5"/>'
+               f'<path d="M18 32H46M18 39H46M18 46H36" stroke="{colour}" stroke-width="2.5" opacity="0.85"/>')
+
+
+places = {
+    "folder": "", "folder-open": "", "inode-directory": "", "folder-templates": "TPL",
+    "folder-publicshare": "PUB", "user-home": "HOME", "user-desktop": "DESK",
+    "folder-documents": "DOC", "folder-download": "DL", "folder-downloads": "DL",
+    "folder-music": "MUS", "folder-pictures": "PIC", "folder-videos": "VID",
+}
+files = {"places": {}, "mimetypes": {}}
+for name, code in places.items():
+    files["places"][name] = folder(code, v["title"] if code == "HOME" else v["line"])
+files["places"]["user-trash"] = folder("BIN", v["muted"])
+files["places"]["user-trash-full"] = folder("BIN", v["alert"])
+for name in ("text-x-generic", "text-plain", "unknown", "application-octet-stream"):
+    files["mimetypes"][name] = sheet(v["cyan"])
+
+for context, icons in files.items():
+    folder_path = os.path.join(OUT, "scalable", context)
+    os.makedirs(folder_path, exist_ok=True)
+    for name, text in icons.items():
+        with open(os.path.join(folder_path, name + ".svg"), "w") as f:
+            f.write(text)
+
+with open(os.path.join(OUT, "index.theme"), "w") as f:
+    f.write(f"""[Icon Theme]
+Name=HUD
+Comment=Folders and files in the theme colours
+Inherits={v.get("icon_base", "Papirus-Dark")},hicolor
+Directories=scalable/places,scalable/mimetypes
+
+[scalable/places]
+Size=64
+MinSize=16
+MaxSize=512
+Type=Scalable
+Context=Places
+
+[scalable/mimetypes]
+Size=64
+MinSize=16
+MaxSize=512
+Type=Scalable
+Context=MimeTypes
+""")

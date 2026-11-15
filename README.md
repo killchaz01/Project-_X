@@ -83,3 +83,5 @@ docs/                       App Store listing draft and privacy policy
 ---
 
 This repository also holds **Apsis OS** (working name), a separate Linux desktop operating system project. See [os/](os/README.md).
+
+**Op Ivy** is the same operating system with a monochrome station-console look. See [opivy/](opivy/README.md).
