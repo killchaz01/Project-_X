@@ -28,11 +28,11 @@ The other three themes, `rover`, `board` and `daylight`:
 |---|---|
 | Typeface | Michroma, a wide square sans, used for everything except the terminal. It ships in `rootfs/usr/share/fonts/truetype/opivy/` under the SIL Open Font License. |
 | Menu bar | Square outlined blocks. The system button is a lit plate with dark lettering. The clock sits in an eight-sided frame. A block lights up when the pointer is on it. |
-| Dock | Numbered square keys (01 APPS, 02 TERM …), each with a split-square marker; open windows follow after a gap. `hudctl set dock_style icons` shows app icons instead, like a Mac dock. |
+| Dock | App icons in square frames on a dark plate with a lit edge; a lit mark under each running app. `hudctl set dock_style labels` gives numbered word keys (01 APPS, 02 TERM …) instead. |
 | Application Center | A grid of numbered keys. Bright keys are installed apps; dim keys can be installed. |
 | Desktop | The live station console (see below): real read-outs, redrawn every second, and every panel clickable. `hudctl set wallpaper_style calm` gives a quiet grid with the name plate instead. Both follow the active theme. |
 | Icons | Folders and files as square plates with the same markers. |
-| Windows | Square corners, a thin frame, no shadow. |
+| Windows | Square corners, a thin frame, no shadow, and round red, yellow and green buttons at the top left. |
 | Themes | `station` (white on black, the default), `rover` (pale cyan on dark teal), `board` (amber on black), `daylight` (black on white). |
 
 Two frame shapes were added to the ones Apsis OS has: `square` and
@@ -44,36 +44,46 @@ internals.
 
 ## If you are coming from a Mac
 
+It is laid out and behaves like macOS, in the station look.
+
 | On macOS | Here |
 |---|---|
-| Menu bar | Bar at the top: system menu, window title, hardware read-outs, preference blocks, clock |
-| Apple menu | The button at the top left |
-| Dock | Dock at the bottom: numbered app keys, then open windows |
-| Launchpad, App Store | Application Center: the APPS tile, or Cmd+A |
-| Spotlight (Cmd+Space) | Launcher, Cmd+Space |
-| Close, minimise, zoom at top left | Same place (can be moved right) |
-| Cmd+Q, Cmd+W | Close the window |
-| Cmd+M, Cmd+H | Minimise |
+| Apple menu | OP IVY at the top left: About This Computer, System Settings…, App Store…, Force Quit…, Sleep, Restart…, Shut Down…, Lock Screen, Log Out |
+| App name in bold, and its menu | The front app's name next to it, in bold. Click it: About, Hide, Quit, Minimise, Zoom, Enter Full Screen, Close Window, Bring All to Front |
+| Menu-bar extras, Control Center | NET, BT, VOL, ALERTS blocks; CONTROL opens the Control Center |
+| Spotlight | SEARCH in the bar, or Cmd+Space |
+| Clock | "Sun Nov 15 05:43 PM" at the top right |
+| Dock | Pinned apps, then (after a divider) any other running app, then the Trash. A mark under an app means it is running. Click a running app to bring it to the front; click again to step through its windows. Rest the pointer for its name. Right-click: New Window, Show, Hide, Keep in Dock / Remove from Dock, Quit |
+| Red, yellow, green buttons | Same colours, same place; grey on inactive windows; the sign shows on hover |
+| Launchpad, Applications | Application Center: the grid icon in the dock, or Cmd+Shift+A |
+| App Store | Catalogue in the Application Center, or App Store… in the system menu |
+| Finder, Terminal, Safari, TextEdit | Files (Thunar), Terminal (foot), Web (Epiphany), Text Editor (Mousepad) |
+| System Settings | Control Center: CONTROL in the bar, or Cmd+, |
+
+| Keys | Does |
+|---|---|
+| Cmd+Q | Quit the app (all its windows) |
+| Cmd+W | Close the window |
+| Cmd+H / Cmd+M | Hide the app / minimise the window |
 | Cmd+Tab | Switch windows |
+| Cmd+Space | Spotlight-style search |
+| Cmd+C, Cmd+X, Cmd+V, Cmd+A | Copy, cut, paste, select all, in the terminal and in text fields of GTK 3 apps (Files, Text Editor, dialogs) |
+| Cmd+Option+Esc | Force Quit |
+| Cmd+Shift+3 / 4 / 5 | Screenshot of the screen / of an area / the screenshot menu, saved to Pictures |
 | Ctrl+Cmd+F | Full screen |
 | Ctrl+Cmd+Q | Lock |
-| Cmd+Shift+3 / Cmd+Shift+4 | Screenshot of the screen / of an area, saved to Pictures |
-| Cmd+, | Open preferences |
-| Finder, Terminal, Safari, TextEdit | Thunar, foot, Web (Epiphany), Mousepad |
-| System Settings | Control Center: the PREFS block in the bar, or Cmd+, |
+| Cmd+, | Control Center |
+| Cmd+Shift+A | Application Center |
 
-Differences you will notice: copy and paste are Ctrl+C and Ctrl+V, each
-window carries its own menus rather than the top bar showing them, and Mac
-apps do not run.
+The Super (Windows) key is Cmd on a PC keyboard. Differences you will
+notice: apps keep their own File/Edit/View menus inside their windows
+rather than in the top bar; Cmd+C and Cmd+V do not reach GTK 4 apps such as
+the Web browser (use Ctrl+C and Ctrl+V there); there is no Mission Control;
+and Mac apps do not run.
 
 ## The menu bar's right side
 
-Two groups of blocks, each with its own shape and colour:
-
-- **Hardware read-outs** (dim frame, blue text): processor load, memory in
-  use, network traffic. Click one for a process list. Also available:
-  `temperature`, `disk`, `cpu#load`.
-- **Preference blocks** (bright frame): each shows a setting and changes it.
+**Preference blocks**: each shows a setting and changes it.
 
 | Block | Shows | Click | Other |
 |---|---|---|---|
@@ -83,12 +93,13 @@ Two groups of blocks, each with its own shape and colour:
 | VOL | volume | sound settings | scroll to change, right-click to mute |
 | PWR | battery | | |
 | ALERTS | notifications on or off | switch | |
-| PREFS | | open Control Center | |
+| CONTROL | | open Control Center | |
+| SEARCH | | search apps | |
 
 Blocks for hardware a machine lacks (battery, backlight, Bluetooth) hide
-themselves. Choose and order the blocks with `hudctl set bar_hardware ...`
-and `hudctl set bar_prefs ...`; more are listed in
-`/usr/share/hud/defaults.conf`.
+themselves. Choose and order them with `hudctl set bar_prefs ...`.
+Processor, memory and network read-outs are available too (they are on the
+console desktop already): `hudctl set bar_right tray,group/hardware,group/prefs,custom/search,clock`.
 
 ## The station console
 
@@ -119,7 +130,7 @@ Right-click anywhere on the console for the system menu.
 
 ## Application Center
 
-Open it from the 01 APPS key in the dock, Cmd+A, or the system menu.
+Open it from the grid icon in the dock, Cmd+Shift+A, or the system menu.
 
 - **Apps**: every installed app as a numbered key. Click one to start it;
   type to filter.
@@ -172,7 +183,7 @@ hudctl set dock_apps 'APPS:hud-center apps,TERM:foot,MAIL:thunderbird'
 hudctl set wallpaper ~/Pictures/photo.jpg    # or "generated"
 hudctl set wallpaper_style calm # quiet desktop instead of the console
 hudctl set console_live no      # console as a still picture, no clicks
-hudctl set dock_style icons     # app icons in the dock instead of keys
+hudctl set dock_style labels    # numbered word keys in the dock (or icons, mac)
 hudctl set dock_icons 'MAIL:thunderbird'   # choose a dock icon by label
 hudctl unset line               # back to the default
 hudctl module                   # list the parts of the desktop
@@ -199,11 +210,12 @@ How it fits together:
 |---|---|---|
 | `windows` | borders, title bars, shortcuts | labwc |
 | `bar` | menu bar | waybar |
-| `dock` | dock | waybar |
+| `dock` | dock | hud-dock (or waybar for the other dock styles) |
 | `launcher` | Cmd+Space search | fuzzel |
 | `notify` | notifications | mako |
 | `terminal` | terminal colours | foot |
 | `wallpaper` | generated background | swaybg |
+| `console` | live station console on the desktop | hud-console |
 | `apps` | colours and button shapes inside apps | GTK |
 | `icons` | folder and file icons | generated SVG |
 | `lock` | lock screen, auto-lock | swaylock, swayidle |

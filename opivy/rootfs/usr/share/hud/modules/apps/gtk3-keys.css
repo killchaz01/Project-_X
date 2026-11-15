@@ -1,0 +1,18 @@
+/* Written by hudctl. Mac keys in GTK 3 apps: Cmd+C, Cmd+X, Cmd+V, Cmd+A.
+   The look itself is in theme.css, shared with GTK 4. */
+@import url("theme.css");
+
+@binding-set mac-entry {
+  bind "<Super>c" { "copy-clipboard" () };
+  bind "<Super>x" { "cut-clipboard" () };
+  bind "<Super>v" { "paste-clipboard" () };
+  bind "<Super>a" { "move-cursor" (buffer-ends, -1, 0) "move-cursor" (buffer-ends, 1, 1) };
+}
+@binding-set mac-text {
+  bind "<Super>c" { "copy-clipboard" () };
+  bind "<Super>x" { "cut-clipboard" () };
+  bind "<Super>v" { "paste-clipboard" () };
+  bind "<Super>a" { "select-all" (1) };
+}
+entry, spinbutton { -gtk-key-bindings: mac-entry; }
+textview { -gtk-key-bindings: mac-text; }

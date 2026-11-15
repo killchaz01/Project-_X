@@ -463,7 +463,7 @@ class Center(Gtk.Window):
         number(f, "Gap around windows", "gap", 0, 30)
         toggle(f, "Natural scrolling", "natural_scroll")
         toggle(f, "Tap to click", "tap_to_click")
-        choice(f, "Dock shows", "dock_style", ["labels", "icons"])
+        choice(f, "Dock", "dock_style", ["mac", "icons", "labels"])
         toggle(f, "Numbered dock keys", "dock_numbers")
         choice(f, "Wallpaper", "wallpaper_style", ["console", "calm"])
         toggle(f, "Live console", "console_live")

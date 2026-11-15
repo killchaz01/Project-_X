@@ -11,7 +11,9 @@
   "group/prefs": { "orientation": "inherit", "modules": {{bar_prefs_json}} },
 
   "custom/menu": { "format": "{{mark_a}} {{logo_text}}", "on-click": "hud-menu", "tooltip": false },
-  "custom/title": { "exec": "hud-menu title", "interval": 1, "format": "{}", "tooltip": false },
+  "custom/title": { "exec": "hud-menu app-name | tr a-z A-Z", "interval": 1, "format": "{}",
+                    "on-click": "hud-menu app", "tooltip": false },
+  "custom/search": { "format": "SEARCH", "on-click": "fuzzel", "tooltip": false },
   "clock": { "format": "{:{{clock_format}}}", "tooltip-format": "<tt>{calendar}</tt>" },
   "tray": { "spacing": 8, "icon-size": 16 },
 
@@ -60,6 +62,6 @@
   },
   "custom/theme": { "format": "{{current_theme}}", "on-click": "hud-menu theme", "tooltip": false },
   "custom/display": { "format": "DISPLAY", "on-click": "wdisplays", "tooltip": false },
-  "custom/prefs": { "format": "{{mark_check}} PREFS", "on-click": "hud-center prefs", "tooltip": false },
+  "custom/prefs": { "format": "{{mark_check}} CONTROL", "on-click": "hud-center prefs", "tooltip": false },
   "custom/power": { "format": "POWER", "on-click": "hud-menu power", "tooltip": false }
 }

@@ -20,7 +20,8 @@ tooltip label { color: {{title}}; font-family: "{{font_mono}}", monospace; font-
 
 #custom-menu, #custom-title, #clock, #cpu, #memory, #disk, #temperature, #network, #bluetooth,
 #backlight, #wireplumber, #battery, #custom-alerts, #custom-theme, #custom-display, #custom-prefs,
-#custom-power { margin: 3px 2px; }
+#custom-power, #custom-search { margin: 3px 2px; }
+#custom-title:hover { color: {{bg}}; background: {{line}}; }
 #hardware, #prefs { margin: 0 6px; }
 #tray { margin: 0 8px; }
 
@@ -32,23 +33,26 @@ tooltip label { color: {{title}}; font-family: "{{font_mono}}", monospace; font-
   {{frame_menu_line_fill}}
 }
 #custom-menu:hover { {{frame_menu_cyan_fill}} }
+/* The front app's name, bold as on a Mac; click it for the app menu. */
 #custom-title {
   margin-left: 10px;
+  padding: 0 8px;
   color: {{title}};
+  font-weight: 900;
   letter-spacing: 2px;
   text-shadow: 0 0 {{glow_px}}px alpha({{title}}, 0.7);
 }
 
 /* System preferences: click to change. Lit when the pointer is on one. */
 #network, #bluetooth, #backlight, #wireplumber, #battery,
-#custom-alerts, #custom-theme, #custom-display, #custom-prefs, #custom-power {
+#custom-alerts, #custom-theme, #custom-display, #custom-prefs, #custom-power, #custom-search {
   color: {{line}};
   text-shadow: 0 0 {{glow_px}}px alpha({{line}}, 0.6);
   {{frame_prefs_line}}
 }
 #network:hover, #bluetooth:hover, #backlight:hover, #wireplumber:hover, #battery:hover,
 #custom-alerts:hover, #custom-theme:hover, #custom-display:hover, #custom-prefs:hover,
-#custom-power:hover {
+#custom-power:hover, #custom-search:hover {
   color: {{bg}};
   text-shadow: none;
   {{frame_prefs_line_fill}}

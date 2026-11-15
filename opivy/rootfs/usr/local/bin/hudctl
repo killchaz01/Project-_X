@@ -30,6 +30,8 @@ import subprocess
 import sys
 
 SYS = "/usr/share/hud"
+sys.path.insert(0, os.path.join(SYS, "lib"))
+from hudapps import APP_TITLES, app_icon, icon_file  # noqa: E402
 # Marker glyphs used on the bar and dock: two split squares and a checker.
 MARKS = ("\u25e9", "\u25ea")
 CHECK = "\u259a"
@@ -127,7 +129,13 @@ def derive(v):
     block = str(int(v.get("bar_height", "34")) - 4)
     for ctx in ("menu", "hardware", "prefs", "clock"):
         v["height_" + ctx] = block
-    icons = v.get("dock_style", "icons") == "icons"
+    style = v.get("dock_style", "mac")
+    # The Mac-style dock is its own program and sits at the bottom; the
+    # other styles (and a dock at the side) are drawn by waybar.
+    mac = style == "mac" and v.get("dock_position", "bottom") == "bottom"
+    v["dock_command"] = ("hud-dock" if mac else
+                         f"waybar -c {USER}/dock/config.json -s {USER}/dock/style.css")
+    icons = style in ("icons", "mac")
     numbered = v.get("dock_numbers") == "yes" and not icons
     v["height_dock"] = "58" if numbered or icons else "46"
     v["tile_w_dock"], v["tile_h_dock"] = "84", "74"
@@ -175,93 +183,6 @@ def derive(v):
     else:
         v["wallpaper_path"] = os.path.expanduser(v["wallpaper"])
     return v
-
-
-# ---------------------------------------------------------------- dock icons
-# Friendly names shown when the pointer rests on a dock icon.
-APP_TITLES = {"APPS": "Application Center", "TERM": "Terminal", "FILES": "Files", "WEB": "Web",
-              "EDIT": "Text Editor", "SCAN": "System Scan", "MAIL": "Mail"}
-# Icons for commands that have no .desktop file of their own.
-COMMAND_ICONS = {"hud-center": "opivy-apps", "hud": "utilities-system-monitor",
-                 "hud-menu": "preferences-system"}
-
-
-def app_icon(command):
-    """The icon name for a command, found through the matching .desktop file."""
-    words = shlex.split(command) if command else []
-    if not words:
-        return ""
-    for w in reversed(words):          # "foot -H hud" is the system scan, not a terminal
-        if w in COMMAND_ICONS:
-            return COMMAND_ICONS[w]
-    exe = os.path.basename(words[0])
-    for folder in (os.path.join(HOME, ".local/share/applications"), "/usr/share/applications"):
-        try:
-            entries = sorted(os.listdir(folder))
-        except OSError:
-            continue
-        for entry in entries:
-            if not entry.endswith(".desktop"):
-                continue
-            exec_line, icon = "", ""
-            try:
-                with open(os.path.join(folder, entry), errors="replace") as f:
-                    for line in f:
-                        if line.startswith("[") and line.strip() != "[Desktop Entry]" and (exec_line or icon):
-                            break
-                        if line.startswith("Exec=") and not exec_line:
-                            exec_line = line[5:].strip()
-                        elif line.startswith("Icon=") and not icon:
-                            icon = line[5:].strip()
-            except OSError:
-                continue
-            first = exec_line.split()[0] if exec_line.split() else ""
-            if icon and os.path.basename(first) == exe:
-                return icon
-    return exe
-
-
-def icon_file(name, v):
-    """A file for an icon name: Op Ivy's own, then the icon sets, then pixmaps."""
-    if not name:
-        return None
-    if os.path.isabs(name):
-        return name if os.path.exists(name) else None
-    if name.startswith("opivy-"):
-        return own_icon(name, v)
-    themes = [v.get("icon_base", "Papirus-Dark"), "Papirus", "Adwaita", "hicolor"]
-    for base in (os.path.join(HOME, ".local/share/icons"), "/usr/share/icons"):
-        for theme in themes:
-            for size in ("scalable", "64x64", "48x48", "128x128", "256x256"):
-                for ext in ("svg", "png"):
-                    path = os.path.join(base, theme, size, "apps", f"{name}.{ext}")
-                    if os.path.exists(path):
-                        return path
-    for ext in ("svg", "png", "xpm"):
-        path = f"/usr/share/pixmaps/{name}.{ext}"
-        if os.path.exists(path):
-            return path
-    return None
-
-
-def own_icon(name, v):
-    """Op Ivy's own icons, drawn in the theme colours."""
-    folder = os.path.join(USER, "icons")
-    os.makedirs(folder, exist_ok=True)
-    path = os.path.join(folder, name + ".svg")
-    line, panel = v.get("line", "#e9f6fa"), v.get("panel", "#070b0e")
-    if name == "opivy-apps":        # a three-by-three grid of keys, one lit
-        cells = "".join(
-            f'<rect x="{9 + c * 16}" y="{9 + r * 16}" width="12" height="12" '
-            f'fill="{line if (r, c) == (0, 0) else "none"}" stroke="{line}" stroke-width="2"/>'
-            for r in range(3) for c in range(3))
-        body = f'<rect x="2" y="2" width="60" height="60" rx="10" fill="{panel}"/>{cells}'
-    else:
-        return None
-    with open(path, "w") as f:
-        f.write(f'<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" '
-                f'viewBox="0 0 64 64">{body}</svg>')
-    return path
 
 
 # ---------------------------------------------------------------- shapes

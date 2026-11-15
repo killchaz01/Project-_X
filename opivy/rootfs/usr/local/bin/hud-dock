@@ -1,0 +1,378 @@
+#!/usr/bin/env python3
+"""hud-dock - a dock that works like the Mac's, in the station look.
+
+  - Pinned apps first (the dock_apps setting), then, after a divider, any
+    other app that has a window open, then the Trash.
+  - A lit mark under an app means it is running; the app in front has a
+    brighter frame.
+  - Click an app that is not running to open it; click one that is
+    running to bring it to the front (click again to cycle its windows).
+  - Rest the pointer on an icon to see its name above it.
+  - Right-click: New Window, Show All Windows, Quit, Keep in Dock /
+    Remove from Dock.
+
+Runs when dock_style is "mac" and the dock is at the bottom.
+"""
+import json
+import os
+import shlex
+import subprocess
+import sys
+
+sys.path.insert(0, "/usr/share/hud/lib")
+import hudapps  # noqa: E402
+
+import gi  # noqa: E402
+gi.require_version("Gtk", "3.0")
+gi.require_version("Gdk", "3.0")
+gi.require_version("GdkPixbuf", "2.0")
+gi.require_version("GtkLayerShell", "0.1")
+gi.require_version("Pango", "1.0")
+gi.require_version("PangoCairo", "1.0")
+import cairo  # noqa: E402
+from gi.repository import Gdk, GdkPixbuf, GLib, Gtk, GtkLayerShell, Pango, PangoCairo  # noqa: E402
+
+USER = hudapps.USER
+TILE, ICON, GAP, PAD = 60, 42, 8, 10      # tile size, icon size, gap between tiles, panel padding
+LABEL_H = 40                              # room above the panel for the hover name
+PANEL_H = TILE + 2 * PAD + 8              # tiles plus the running marks under them
+
+
+def settings():
+    try:
+        with open(os.path.join(USER, "resolved.json")) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def rgb(v, key, fallback="#e9f6fa"):
+    c = Gdk.RGBA()
+    c.parse(v.get(key, fallback))
+    return c.red, c.green, c.blue
+
+
+def run(command):
+    subprocess.Popen(command, shell=True, start_new_session=True,
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def windows():
+    """Open windows as [(app_id, title, focused)], from wlrctl."""
+    def listing(*extra):
+        try:
+            out = subprocess.run(["wlrctl", "toplevel", "list", *extra],
+                                 capture_output=True, text=True, timeout=2).stdout
+        except (OSError, subprocess.SubprocessError):
+            return []
+        rows = []
+        for line in out.splitlines():
+            app, _, title = line.partition(": ")
+            if app.strip():
+                rows.append((app.strip(), title.strip()))
+        return rows
+    focused = set(listing("state:focused"))
+    return [(a, t, (a, t) in focused) for a, t in listing()]
+
+
+class Item:
+    def __init__(self, title, command, icon_name, keys, pinned, label=""):
+        self.title, self.command, self.pinned, self.label = title, command, pinned, label
+        self.keys = {k.lower() for k in keys if k}
+        self.icon_name = icon_name
+        self.pixbuf = None
+        self.app_ids, self.focused = [], False
+
+    def load_icon(self, v):
+        path = hudapps.icon_file(self.icon_name, v) or hudapps.icon_file("application-x-executable", v)
+        if path:
+            try:
+                self.pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_size(path, ICON, ICON)
+            except GLib.Error:
+                self.pixbuf = None
+
+
+class Dock(Gtk.Window):
+    def __init__(self, v):
+        super().__init__()
+        self.v = v
+        self.apps = hudapps.desktop_entries()
+        self.pinned = self.read_pins()
+        self.items, self.boxes, self.hover = [], [], None
+        self.cycle = {}
+        self.trash = Item("Trash", "thunar trash:///", "user-trash", [], False)
+        self.trash.load_icon(v)
+
+        screen = self.get_screen()
+        visual = screen.get_rgba_visual()
+        if visual:
+            self.set_visual(visual)
+        self.set_app_paintable(True)
+        GtkLayerShell.init_for_window(self)
+        GtkLayerShell.set_layer(self, GtkLayerShell.Layer.TOP)
+        GtkLayerShell.set_namespace(self, "hud-dock")
+        GtkLayerShell.set_anchor(self, GtkLayerShell.Edge.BOTTOM, True)
+        GtkLayerShell.set_margin(self, GtkLayerShell.Edge.BOTTOM, 4)
+        GtkLayerShell.set_exclusive_zone(self, PANEL_H + 4)
+
+        self.area = Gtk.DrawingArea()
+        self.area.add_events(Gdk.EventMask.POINTER_MOTION_MASK | Gdk.EventMask.BUTTON_RELEASE_MASK |
+                             Gdk.EventMask.LEAVE_NOTIFY_MASK)
+        self.area.connect("draw", self.draw)
+        self.area.connect("motion-notify-event", lambda _w, e: self.set_hover(self.item_at(e.x, e.y)))
+        self.area.connect("leave-notify-event", lambda *_: self.set_hover(None))
+        self.area.connect("button-release-event", self.click)
+        self.area.connect("size-allocate", lambda *_: self.update_input())
+        self.add(self.area)
+        self.refresh()
+        GLib.timeout_add(1000, self.refresh)
+        self.show_all()
+
+    # ------------------------------------------------------------ items
+    def read_pins(self):
+        pins = []
+        for item in filter(None, (x.strip() for x in self.v.get("dock_apps", "").split(","))):
+            label, _, command = item.partition(":")
+            label, command = label.strip(), command.strip() or label.strip().lower()
+            try:
+                exe = os.path.basename(shlex.split(command)[0])
+            except (ValueError, IndexError):
+                exe = command.split()[0] if command.split() else ""
+            entry = hudapps.find_entry(exe, self.apps)
+            keys = [exe]
+            if entry and not any(w in hudapps.COMMAND_ICONS for w in command.split()[1:]):
+                keys += [entry["id"], entry["wmclass"], entry["id"].split(".")[-1]]
+            if any(w in hudapps.COMMAND_ICONS for w in command.split()):
+                keys = [w for w in command.split() if w in hudapps.COMMAND_ICONS]
+            title = hudapps.APP_TITLES.get(label, entry["name"] if entry else label.title())
+            it = Item(title, command, hudapps.app_icon(command), keys, True, label)
+            it.load_icon(self.v)
+            pins.append(it)
+        return pins
+
+    def refresh(self):
+        wins = windows()
+        for it in self.pinned:
+            it.app_ids, it.focused = [], False
+        extra = {}
+        for app_id, _title, focused in wins:
+            owner = next((it for it in self.pinned if app_id.lower() in it.keys), None)
+            if owner is None:
+                if app_id not in extra:
+                    entry = hudapps.find_entry(app_id, self.apps)
+                    it = Item(entry["name"] if entry else app_id, entry["exec"].split("%")[0].strip()
+                              if entry else app_id, (entry["icon"] if entry else "") or app_id,
+                              [app_id], False)
+                    it.load_icon(self.v)
+                    extra[app_id] = it
+                owner = extra[app_id]
+            owner.app_ids.append(app_id)
+            owner.focused = owner.focused or focused
+        trash_dir = os.path.expanduser("~/.local/share/Trash/files")
+        full = os.path.isdir(trash_dir) and bool(os.listdir(trash_dir))
+        if self.trash.icon_name != ("user-trash-full" if full else "user-trash"):
+            self.trash.icon_name = "user-trash-full" if full else "user-trash"
+            self.trash.load_icon(self.v)
+        items = list(self.pinned) + [None] + list(extra.values()) + ([None] if extra else []) + [self.trash]
+        if [id(i) for i in items] != [id(i) for i in self.items] or True:
+            self.items = items
+            self.layout()
+        self.area.queue_draw()
+        return True
+
+    def layout(self):
+        x = PAD
+        self.boxes = []
+        for it in self.items:
+            if it is None:
+                self.boxes.append((x + 2, None))
+                x += 14
+            else:
+                self.boxes.append((x, it))
+                x += TILE + GAP
+        width = x - GAP + PAD
+        self.panel_w = width
+        self.set_size_request(max(width, 220), LABEL_H + PANEL_H)
+
+    def update_input(self):
+        """Only the panel takes clicks; the space above it (for names) lets them through."""
+        w = self.area.get_allocated_width()
+        x0 = (w - self.panel_w) // 2
+        region = cairo.Region(cairo.RectangleInt(int(x0), LABEL_H, int(self.panel_w), PANEL_H))
+        win = self.get_window()
+        if win:
+            win.input_shape_combine_region(region, 0, 0)
+
+    def origin(self):
+        return (self.area.get_allocated_width() - self.panel_w) / 2, LABEL_H
+
+    def item_at(self, ex, ey):
+        ox, oy = self.origin()
+        for i, (x, it) in enumerate(self.boxes):
+            if it and ox + x <= ex <= ox + x + TILE and oy + PAD <= ey <= oy + PAD + TILE:
+                return i
+        return None
+
+    def set_hover(self, i):
+        if i != self.hover:
+            self.hover = i
+            self.area.queue_draw()
+
+    # ---------------------------------------------------------- drawing
+    def draw(self, _w, cr):
+        v = self.v
+        cr.set_operator(cairo.OPERATOR_SOURCE)
+        cr.set_source_rgba(0, 0, 0, 0)
+        cr.paint()
+        cr.set_operator(cairo.OPERATOR_OVER)
+        ox, oy = self.origin()
+        line, dim, panel, bg = rgb(v, "line"), rgb(v, "line_dim"), rgb(v, "panel"), rgb(v, "bg")
+        cyan = rgb(v, "cyan")
+        stroke = float(v.get("border_width", 2))
+        # The panel: a dark plate with a lit edge and checker marks at the ends.
+        cr.rectangle(ox + 0.5, oy + 0.5, self.panel_w - 1, PANEL_H - 1)
+        cr.set_source_rgba(*panel, 0.94)
+        cr.fill_preserve()
+        cr.set_source_rgba(*line, 1)
+        cr.set_line_width(stroke)
+        cr.stroke()
+        for cx in (ox - 2, ox + self.panel_w - 8):
+            for k in range(2):
+                cr.rectangle(cx + k * 5, oy - 2 + k * 5, 5, 5)
+            cr.set_source_rgba(*line, 1)
+            cr.fill()
+
+        for i, (x, it) in enumerate(self.boxes):
+            x += ox
+            if it is None:       # divider
+                cr.set_source_rgba(*dim, 1)
+                cr.set_line_width(2)
+                cr.move_to(x + 5, oy + PAD + 4)
+                cr.line_to(x + 5, oy + PAD + TILE - 4)
+                cr.stroke()
+                continue
+            y = oy + PAD
+            lit = i == self.hover
+            frame = cyan if it.focused else (line if it.app_ids else dim)
+            cr.rectangle(x, y, TILE, TILE)
+            cr.set_source_rgba(*(line if lit else bg), 1 if lit else 0.85)
+            cr.fill_preserve()
+            cr.set_source_rgba(*frame, 1)
+            cr.set_line_width(stroke)
+            cr.stroke()
+            if it.pixbuf:
+                Gdk.cairo_set_source_pixbuf(cr, it.pixbuf, x + (TILE - it.pixbuf.get_width()) / 2,
+                                            y + (TILE - it.pixbuf.get_height()) / 2)
+                cr.paint()
+            else:                # no icon: the app's short name in the tile
+                layout = PangoCairo.create_layout(cr)
+                layout.set_font_description(Pango.FontDescription(f"{v.get('font_ui', 'Sans')} Bold 8"))
+                layout.set_width(int((TILE - 6) * Pango.SCALE))
+                layout.set_alignment(Pango.Alignment.CENTER)
+                layout.set_ellipsize(Pango.EllipsizeMode.END)
+                layout.set_text((it.label or it.title).upper(), -1)
+                _tw, th = layout.get_pixel_size()
+                cr.set_source_rgba(*(bg if lit else line), 1)
+                cr.move_to(x + 3, y + (TILE - th) / 2)
+                PangoCairo.show_layout(cr, layout)
+            if it.app_ids:       # running mark
+                cr.rectangle(x + TILE / 2 - 4, y + TILE + 5, 8, 4)
+                cr.set_source_rgba(*(cyan if it.focused else line), 1)
+                cr.fill()
+            if lit:
+                self.name_tag(cr, it.title.upper(), x + TILE / 2, oy - 6, line, bg)
+
+    def name_tag(self, cr, text, cx, bottom, line, bg):
+        layout = PangoCairo.create_layout(cr)
+        layout.set_font_description(Pango.FontDescription(f"{self.v.get('font_ui', 'Sans')} Bold 9"))
+        layout.set_text(text, -1)
+        tw, th = layout.get_pixel_size()
+        w, h = tw + 20, th + 10
+        x = max(2, min(self.area.get_allocated_width() - w - 2, cx - w / 2))
+        cr.rectangle(x, bottom - h, w, h)
+        cr.set_source_rgba(*line, 1)
+        cr.fill()
+        cr.set_source_rgba(*bg, 1)
+        cr.move_to(x + 10, bottom - h + 5)
+        PangoCairo.show_layout(cr, layout)
+
+    # ------------------------------------------------------------ clicks
+    def click(self, _w, event):
+        i = self.item_at(event.x, event.y)
+        if i is None:
+            return
+        it = self.boxes[i][1]
+        if event.button == 1:
+            self.activate(it)
+        elif event.button == 3:
+            self.context_menu(it, event)
+
+    def activate(self, it):
+        if it is self.trash or not it.app_ids:
+            run(it.command)
+            return
+        app = it.app_ids[0]
+        # Bring the app forward; if it already is, step through its windows.
+        if it.focused and len(it.app_ids) > 1:
+            titles = [t for a, t, _f in windows() if a == app]
+            n = (self.cycle.get(app, 0) + 1) % max(1, len(titles))
+            self.cycle[app] = n
+            run(f"wlrctl toplevel focus app_id:{shlex.quote(app)} title:{shlex.quote(titles[n])}")
+        else:
+            run(f"wlrctl toplevel focus app_id:{shlex.quote(app)}")
+
+    def context_menu(self, it, event):
+        menu = Gtk.Menu()
+
+        def entry(label, callback):
+            m = Gtk.MenuItem(label=label)
+            m.connect("activate", lambda *_: callback())
+            menu.append(m)
+
+        if it is self.trash:
+            entry("Open", lambda: run(it.command))
+            entry("Empty Trash", lambda: run("gio trash --empty"))
+        else:
+            if it.app_ids:
+                app = shlex.quote(it.app_ids[0])
+                entry("New Window", lambda: run(it.command))
+                entry("Show", lambda: run(f"wlrctl toplevel focus app_id:{app}"))
+                entry("Hide", lambda: run(f"wlrctl toplevel minimize app_id:{app}"))
+                menu.append(Gtk.SeparatorMenuItem())
+            else:
+                entry("Open", lambda: run(it.command))
+            if it.pinned:
+                entry("Remove from Dock", lambda: self.set_pins([p for p in self.pinned if p is not it]))
+            else:
+                entry("Keep in Dock", lambda: self.set_pins(self.pinned + [it]))
+            if it.app_ids:
+                menu.append(Gtk.SeparatorMenuItem())
+                entry("Quit", lambda: run(f"wlrctl toplevel close app_id:{shlex.quote(it.app_ids[0])}"))
+        menu.show_all()
+        menu.attach_to_widget(self.area, None)
+        menu.popup_at_pointer(event)
+
+    def set_pins(self, items):
+        value = ",".join(f"{(p.label or p.title.upper().replace(' ', ''))}:{p.command}" for p in items)
+        subprocess.Popen(["hudctl", "set", "dock_apps", value], start_new_session=True)
+
+
+def main():
+    if len(sys.argv) > 1 and sys.argv[1] in ("-h", "--help"):
+        print(__doc__.strip())
+        return
+    v = settings()
+    if not v:
+        sys.exit("hud-dock: no settings yet (run: hudctl apply)")
+    if not GtkLayerShell.is_supported():
+        sys.exit("hud-dock: this desktop does not support layer-shell")
+    css = Gtk.CssProvider()
+    css.load_from_data(b"window { background: transparent; }")
+    Gtk.StyleContext.add_provider_for_screen(Gdk.Screen.get_default(), css,
+                                             Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+    Dock(v).connect("destroy", Gtk.main_quit)
+    Gtk.main()
+
+
+if __name__ == "__main__":
+    main()

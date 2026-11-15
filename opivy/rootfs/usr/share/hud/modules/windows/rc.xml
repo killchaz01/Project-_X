@@ -7,6 +7,8 @@
     <decoration>server</decoration>
   </core>
   <theme>
+    <!-- Red, yellow and green buttons, drawn by hud-buttons. -->
+    <name>OpIvy</name>
     <cornerRadius>{{radius}}</cornerRadius>
     <titlebar>
       <layout>{{titlebar_layout}}</layout>
@@ -21,11 +23,16 @@
     <!-- The Super key is Command on a Mac keyboard. -->
     <keybind key="W-space"><action name="Execute" command="fuzzel"/></keybind>
     <keybind key="W-Return"><action name="Execute" command="{{terminal}}"/></keybind>
-    <keybind key="W-a"><action name="Execute" command="hud-center apps"/></keybind>
-    <keybind key="W-q"><action name="Close"/></keybind>
+    <!-- Cmd+Shift+A: Applications, as in the Mac's Finder. Cmd+A is left to
+         apps for Select All. -->
+    <keybind key="W-S-a"><action name="Execute" command="hud-center apps"/></keybind>
+    <!-- Cmd+Q quits the app (all its windows); Cmd+W closes one window. -->
+    <keybind key="W-q"><action name="Execute" command="hud-menu quit"/></keybind>
     <keybind key="W-w"><action name="Close"/></keybind>
     <keybind key="W-m"><action name="Iconify"/></keybind>
-    <keybind key="W-h"><action name="Iconify"/></keybind>
+    <keybind key="W-h"><action name="Execute" command="hud-menu hide"/></keybind>
+    <keybind key="W-A-Escape"><action name="Execute" command="hud-menu force-quit"/></keybind>
+    <keybind key="W-S-5"><action name="Execute" command="hud-menu screenshot-menu"/></keybind>
     <keybind key="W-Tab"><action name="NextWindow"/></keybind>
     <keybind key="W-S-Tab"><action name="PreviousWindow"/></keybind>
     <keybind key="W-C-f"><action name="ToggleFullscreen"/></keybind>

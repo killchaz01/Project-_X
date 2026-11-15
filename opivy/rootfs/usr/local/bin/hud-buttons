@@ -1,0 +1,48 @@
+#!/usr/bin/env python3
+"""hud-buttons - draw the window buttons: red, yellow and green, like a Mac.
+
+Writes a window-manager theme called OpIvy to ~/.local/share/themes/OpIvy.
+Close is the theme's alert colour, minimise its warning colour and zoom
+its "go" colour. Inactive windows get grey buttons; the pointer on a
+button shows its sign (x, -, +). The colours and borders of the window
+frame itself come from the windows module's themerc override.
+"""
+import json
+import os
+
+USER = os.path.join(os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")), "hud")
+OUT = os.path.join(os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share")),
+                   "themes", "OpIvy", "openbox-3")
+
+with open(os.path.join(USER, "resolved.json")) as f:
+    v = json.load(f)
+colours = {"close": v.get("alert", "#ff4a32"), "iconify": v.get("warn", "#ffb445"),
+           "max": v.get("go", "#57e389"), "max_toggled": v.get("go", "#57e389")}
+grey, ink = v.get("line_dim", "#47606b"), v.get("bg", "#030506")
+signs = {"close": "M8.6 8.6L15.4 15.4M15.4 8.6L8.6 15.4",
+         "iconify": "M8 12H16",
+         "max": "M12 8V16M8 12H16",
+         "max_toggled": "M8.5 12H15.5"}
+
+
+def button(fill, sign=None):
+    body = f'<circle cx="12" cy="12" r="7" fill="{fill}"/>'
+    if sign:
+        body += f'<path d="{sign}" stroke="{ink}" stroke-width="1.8" stroke-linecap="round"/>'
+    return f'<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">{body}</svg>'
+
+
+os.makedirs(OUT, exist_ok=True)
+for name, colour in colours.items():
+    files = {f"{name}-active.svg": button(colour),
+             f"{name}-inactive.svg": button(grey),
+             f"{name}_hover-active.svg": button(colour, signs[name]),
+             f"{name}_hover-inactive.svg": button(colour, signs[name])}
+    for fname, svg in files.items():
+        with open(os.path.join(OUT, fname), "w") as f:
+            f.write(svg)
+# The theme needs a themerc; everything in it is set by the override file.
+themerc = os.path.join(OUT, "themerc")
+if not os.path.exists(themerc):
+    with open(themerc, "w") as f:
+        f.write("# Op Ivy window buttons. Colours: ~/.config/labwc/themerc-override\n")

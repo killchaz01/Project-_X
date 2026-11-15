@@ -61,6 +61,8 @@ swaybg
 swaylock
 swayidle
 wlrctl
+# presses shortcuts for the app menu (Zoom, Full Screen)
+wtype
 wlr-randr
 grim
 slurp

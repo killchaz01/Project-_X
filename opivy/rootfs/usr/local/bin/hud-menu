@@ -1,38 +1,133 @@
 #!/bin/bash
-# hud-menu - the system menu (the button at the left of the menu bar),
-# plus small helper actions used by keyboard shortcuts and the bar.
+# hud-menu - the menus of the menu bar, and helpers for shortcuts.
 #
-#   hud-menu                  show the system menu
+#   hud-menu                  the system menu (like the Apple menu)
+#   hud-menu app              the front app's menu (click its name in the bar)
+#   hud-menu app-name         print the front app's name (for the bar)
+#   hud-menu quit             quit the front app: close all its windows (Cmd+Q)
+#   hud-menu hide             hide the front app: minimise its windows (Cmd+H)
+#   hud-menu force-quit       pick an app to force quit (Cmd+Option+Esc)
+#   hud-menu screenshot       save the whole screen to ~/Pictures (Cmd+Shift+3)
+#   hud-menu screenshot-area  drag to choose what to save (Cmd+Shift+4)
+#   hud-menu screenshot-menu  screen, area or window (Cmd+Shift+5)
 #   hud-menu theme            pick a theme
 #   hud-menu settings         open your settings file in the editor
-#   hud-menu screenshot       save the whole screen to ~/Pictures
-#   hud-menu screenshot-area  drag to choose what to save
-#   hud-menu title            print the focused window's title (for the bar)
 #   hud-menu alerts           print whether notifications are on (for the bar)
 #   hud-menu alerts-toggle    switch notifications on or off
 #   hud-menu bluetooth        switch Bluetooth on or off
-#   hud-menu power            lock, log out, restart, shut down
+#   hud-menu power            sleep, restart, shut down, lock, log out
+#   hud-menu title            print the front window's title
 set -u
 CONF="${XDG_CONFIG_HOME:-$HOME/.config}/hud"
+TERMINAL=$(sed -n 's/^ *terminal *= *//p' "$CONF/settings.conf" 2>/dev/null | tail -1)
+TERMINAL=${TERMINAL:-foot}
 
-pick() { fuzzel --dmenu --prompt "$1 > " --lines "${2:-10}" --width 34; }
+pick() { fuzzel --dmenu --prompt "$1 > " --lines "${2:-10}" --width "${3:-34}"; }
+
+# The front window's app id, and the app's display name.
+front_app() { wlrctl toplevel list state:focused 2>/dev/null | head -1 | sed 's/:.*//'; }
+app_name() {
+    [ -n "$1" ] || { echo "Desktop"; return; }
+    python3 - "$1" <<'PY'
+import sys
+sys.path.insert(0, "/usr/share/hud/lib")
+import hudapps
+e = hudapps.find_entry(sys.argv[1])
+print(e["name"] if e else sys.argv[1].split(".")[-1].capitalize())
+PY
+}
+
+# Ask before something that cannot be undone, like the Mac does.
+confirm() {
+    local answer
+    answer=$(printf '%s\n' "$1" "Cancel" | pick "$2" 2 40)
+    [ "$answer" = "$1" ]
+}
 
 shot() {
     local dir file
     dir=$(xdg-user-dir PICTURES 2>/dev/null || echo "$HOME/Pictures")
     mkdir -p "$dir"
     file="$dir/Screenshot $(date '+%Y-%m-%d at %H.%M.%S').png"
-    if [ "$1" = area ]; then
-        grim -g "$(slurp)" "$file" || return
-    else
-        grim "$file" || return
-    fi
+    case "$1" in
+        area)   grim -g "$(slurp)" "$file" || return ;;
+        window) grim -g "$(slurp -o -r 2>/dev/null || slurp)" "$file" || return ;;
+        *)      grim "$file" || return ;;
+    esac
     notify-send "Screenshot saved" "$file"
+}
+
+force_quit() {
+    local list choice app exe
+    list=$(wlrctl toplevel list 2>/dev/null | sed 's/:.*//' | sort -u)
+    [ -n "$list" ] || { notify-send "Force Quit" "No apps are open."; return; }
+    choice=$(while read -r app; do printf '%s  (%s)\n' "$(app_name "$app")" "$app"; done <<< "$list" |
+             pick "FORCE QUIT" 10 44) || return
+    app=$(sed 's/.*(\(.*\))$/\1/' <<< "$choice")
+    [ -n "$app" ] || return
+    wlrctl toplevel close "app_id:$app" 2>/dev/null
+    sleep 2
+    # Still there: stop the program itself.
+    if wlrctl toplevel find "app_id:$app" 2>/dev/null; then
+        exe=$(basename "${app##*.}")
+        pkill -KILL -i -x "$exe" 2>/dev/null || pkill -KILL -i -f "$app" 2>/dev/null
+    fi
+}
+
+power() {
+    case "$1" in
+        Sleep)       systemctl suspend ;;
+        Restart*)    confirm "Restart" "RESTART NOW?" && systemctl reboot ;;
+        Shut*)       confirm "Shut Down" "SHUT DOWN NOW?" && systemctl poweroff ;;
+        Lock*)       swaylock -f ;;
+        Log*)        confirm "Log Out" "LOG OUT $(id -un | tr a-z A-Z)?" && labwc --exit ;;
+    esac
 }
 
 case "${1:-}" in
 title)
     wlrctl toplevel list state:focused 2>/dev/null | head -1 | sed 's/^[^:]*: //' | cut -c1-22 | tr a-z A-Z
+    ;;
+app-name)
+    app_name "$(front_app)"
+    ;;
+app)
+    app=$(front_app)
+    name=$(app_name "$app")
+    if [ -z "$app" ]; then
+        choice=$(printf '%s\n' "New File Window" "Open Home" "Open Documents" "Open Downloads" \
+                 "Search Apps" | pick "DESKTOP" 5) || exit 0
+        case "$choice" in
+            New*)      thunar & ;;
+            "Open Home") thunar "$HOME" & ;;
+            *Documents) thunar "$(xdg-user-dir DOCUMENTS)" & ;;
+            *Downloads) thunar "$(xdg-user-dir DOWNLOAD)" & ;;
+            Search*)   fuzzel & ;;
+        esac
+        exit 0
+    fi
+    choice=$(printf '%s\n' "About $name" "Hide $name" "Quit $name" \
+             "Minimise" "Zoom" "Enter Full Screen" "Close Window" "Bring All to Front" |
+             pick "$(tr a-z A-Z <<< "$name")" 8 38) || exit 0
+    case "$choice" in
+        About*)   notify-send "$name" "App ID: $app" ;;
+        Hide*)    wlrctl toplevel minimize "app_id:$app" ;;
+        Quit*)    wlrctl toplevel close "app_id:$app" ;;
+        Minimise) wlrctl toplevel minimize "app_id:$app" state:focused ;;
+        Zoom)     sleep 0.3; wtype -M logo -k Up -m logo ;;
+        Enter*)   sleep 0.3; wtype -M logo -M ctrl -k f -m ctrl -m logo ;;
+        Close*)   sleep 0.3; wtype -M logo -k w -m logo ;;
+        Bring*)   wlrctl toplevel focus "app_id:$app" ;;
+    esac
+    ;;
+quit)
+    app=$(front_app); [ -n "$app" ] && wlrctl toplevel close "app_id:$app"
+    ;;
+hide)
+    app=$(front_app); [ -n "$app" ] && wlrctl toplevel minimize "app_id:$app"
+    ;;
+force-quit)
+    force_quit
     ;;
 alerts)
     if makoctl mode 2>/dev/null | grep -q do-not-disturb; then
@@ -53,13 +148,9 @@ bluetooth)
     fi
     ;;
 power)
-    choice=$(printf '%s\n' "Lock Screen" "Log Out" "Restart" "Shut Down" | pick POWER 4)
-    case "$choice" in
-        Lock*)   swaylock -f ;;
-        Log*)    labwc --exit ;;
-        Restart) systemctl reboot ;;
-        Shut*)   systemctl poweroff ;;
-    esac
+    choice=$(printf '%s\n' "Sleep" "Restart…" "Shut Down…" "Lock Screen" "Log Out $(id -un)…" |
+             pick POWER 5) || exit 0
+    power "$choice"
     ;;
 theme)
     choice=$(hudctl theme | sed 's/^[* ] //' | pick THEME 6 | awk '{print $1}')
@@ -76,21 +167,27 @@ settings)
     ;;
 screenshot)      shot full ;;
 screenshot-area) shot area ;;
-"")
-    choice=$(printf '%s\n' "About This Computer" "Application Center" "Control Center" \
-        "Change Theme" "Settings File" "Lock Screen" "Log Out" "Restart" "Shut Down" | pick SYSTEM 9)
+screenshot-menu)
+    choice=$(printf '%s\n' "Capture Entire Screen" "Capture Selected Portion" "Capture Selected Window" |
+             pick SCREENSHOT 3 38) || exit 0
     case "$choice" in
-        About*)   foot -H hud ;;
-        Application*) hud-center apps ;;
-        Control*) hud-center prefs ;;
-        Change*)  exec "$0" theme ;;
-        Settings*) exec "$0" settings ;;
-        Lock*)    swaylock -f ;;
-        Log*)     labwc --exit ;;
-        Restart)  systemctl reboot ;;
-        Shut*)    systemctl poweroff ;;
+        *Entire*)  sleep 0.4; shot full ;;
+        *Portion*) shot area ;;
+        *Window*)  shot window ;;
+    esac
+    ;;
+"")
+    me=$(id -un)
+    choice=$(printf '%s\n' "About This Computer" "System Settings…" "App Store…" \
+        "Force Quit…" "Sleep" "Restart…" "Shut Down…" "Lock Screen" "Log Out $me…" | pick SYSTEM 9) || exit 0
+    case "$choice" in
+        About*)        "$TERMINAL" -H hud & ;;
+        System*)       hud-center prefs & ;;
+        App\ Store*)   hud-center catalog & ;;
+        Force*)        force_quit ;;
+        *)             power "$choice" ;;
     esac
     ;;
 *)
-    sed -n '2,14s/^# \{0,1\}//p' "$0"; exit 1 ;;
+    sed -n '2,20s/^# \{0,1\}//p' "$0"; exit 1 ;;
 esac
