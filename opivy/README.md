@@ -30,7 +30,7 @@ The other three themes, `rover`, `board` and `daylight`:
 | Menu bar | Square outlined blocks. The system button is a lit plate with dark lettering. The clock sits in an eight-sided frame. A block lights up when the pointer is on it. |
 | Dock | Numbered square keys, each with a split-square marker. `hudctl set dock_numbers no` gives plain labels. |
 | Application Center | A grid of numbered keys. Bright keys are installed apps; dim keys can be installed. |
-| Wallpaper | A generated console: name plate, status frame, unit list, bar meters, sequence strip. It is redrawn in the colours of whichever theme is active. |
+| Wallpaper | A generated console in four panels: a status board with numbered units, a cycle log with month and day strips, an eight-sided countdown frame, and a side list with numbered keys and meters. It is redrawn in the colours of whichever theme is active. |
 | Icons | Folders and files as square plates with the same markers. |
 | Windows | Square corners, a thin frame, no shadow. |
 | Themes | `station` (white on black, the default), `rover` (pale cyan on dark teal), `board` (amber on black), `daylight` (black on white). |

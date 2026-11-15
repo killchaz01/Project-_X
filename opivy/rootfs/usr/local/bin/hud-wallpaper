@@ -3,8 +3,8 @@
 
 Reads ~/.config/hud/resolved.json (written by hudctl apply) and writes
 wallpaper.svg and wallpaper.png next to it. The picture is a station
-console: ruled panels, a name plate, an eight-sided status frame, a
-numbered unit list, a sequence strip and checkerboard register marks.
+console in four ruled panels: a status board, a cycle log, an eight-sided
+countdown frame, and a side list with numbered keys and meters.
 Change "wallpaper_seed" for a different arrangement of the small print.
 """
 import hashlib
@@ -24,7 +24,7 @@ if v.get("wallpaper", "generated") != "generated":
 
 keys = ("bg bg_alt panel text muted line line_dim title warn alert ok cool cyan "
         "wallpaper_seed scanlines glow os_name font_ui font_mono border_width glow_strength").split()
-stamp = hashlib.sha256(json.dumps([v.get(k) for k in keys] + [4]).encode()).hexdigest()
+stamp = hashlib.sha256(json.dumps([v.get(k) for k in keys] + [6]).encode()).hexdigest()
 stamp_file = os.path.join(USER, "wallpaper.stamp")
 png = os.path.join(USER, "wallpaper.png")
 if os.path.exists(png) and os.path.exists(stamp_file) and open(stamp_file).read() == stamp:
@@ -119,97 +119,144 @@ add('<g filter="url(#glow)">' if v.get("glow") == "yes" else "<g>")
 
 # Ruled panels. The top and bottom strips sit behind the menu bar and dock.
 L, R, T, B = 70, W - 70, 130, H - 190
+SPLIT_X, MID_Y = 1560, 800
 box(L, T, R - L, B - T)
-SPLIT_X = 1560                   # left column | right column
-MID_Y = 880                      # upper row | lower row
-add(f'<path d="M{SPLIT_X} {T}V{B}M{L} {MID_Y}H{SPLIT_X}M{SPLIT_X} {MID_Y + 110}H{R}" '
-    f'stroke="{LINE}" stroke-width="{SW}" fill="none"/>')
+add(f'<path d="M{SPLIT_X} {T}V{B}M{L} {MID_Y}H{R}" stroke="{LINE}" stroke-width="{SW}" fill="none"/>')
 for x, y in ((L, T), (R, T), (L, B), (R, B)):
     checker(x - 21, y - 21, 42)
 
-# --- upper left: name plate and the large mark ---
-px, py = L + 70, T + 80
-mark(px, py, 150)
-plate(px + 180, py, 150 + len(NAME) * 104, 150, NAME, 104)
-text(px + 184, py + 196, "STATION DESKTOP SYSTEM", LINE, 30, spacing=7)
-text(px, py + 290, "A WORKING CONSOLE FOR ONE OPERATOR.  ALL UNITS REPORT TO THIS DESK.", MUTED, 17, spacing=2)
-small_print(px, py + 330, 4, 6)
-# Small markers down the left edge of the panel.
-for i, yy in enumerate((py + 470, py + 540, py + 610)):
-    split(px, yy, 46, flip=i % 2 == 1)
-    text(px + 64, yy + 22, ("SYS NAV", "NET COM", "PWR BUS")[i], LINE, 17)
-    text(px + 64, yy + 43, ("4401-6U4", "2207-1D9", "9030-3K2")[i], MUTED, 14)
-checker(px + 300, py + 480, 90, 3)
-# Bar meters.
-for i in range(5):
-    bx = px + 470 + i * 120
-    box(bx, py + 470, 84, 186, LINE, 2)
-    level = rnd.uniform(0.2, 0.95)
-    add(f'<rect x="{bx + 10}" y="{py + 470 + 176 - 166 * level:.0f}" width="64" height="{166 * level:.0f}" '
-        f'fill="{LINE}"/>')
-    text(bx + 42, py + 686, ("AV", "COM", "NAV", "ENV", "AUX")[i], LINE, 17, "middle")
 
-# --- upper right: eight-sided status frame ---
-ox, oy, ow, oh = SPLIT_X + 90, T + 150, R - SPLIT_X - 180, 560
-text(ox + 40, oy - 34, "DESK 14", LINE, 22)
-text(ox + ow - 40, oy - 34, "00-TRAQ", LINE, 22, "end")
-octagon(ox, oy, ow, oh, 110, LINE, SW + 3)
-octagon(ox + 22, oy + 22, ow - 44, oh - 44, 98, LINE, 2)
-plate(ox + 110, oy + 66, ow - 220, 90, "STANDING BY", 40, anchor="middle")
-text(ox + ow / 2, oy + 200, "ALL UNITS ACCOUNTED FOR", LINE, 21, "middle", 4)
-add(f'<path d="M{ox + 22} {oy + 236}H{ox + ow - 22}M{ox + 22} {oy + 404}H{ox + ow - 22}" '
-    f'stroke="{LINE}" stroke-width="{SW}"/>')
-text(ox + ow / 2, oy + 352, "NOMINAL", TITLE, 84, "middle", 6)
-checker(ox + ow / 2 - 24, oy + 424, 48)
-text(ox + ow / 2, oy + 508, "LINK ESTABLISHED", LINE, 21, "middle", 4)
-split(ox - 62, oy + oh / 2 - 23, 46)
-split(ox + ow + 16, oy + oh / 2 - 23, 46, flip=True)
-text(ox + ow / 2, oy + oh + 60, "COM . NAV", LINE, 34, "middle", 6)
+def name_plate(x, y, w, h):
+    """The lit name plate: mark, name, and a line of small print under it."""
+    add(f'<rect x="{x}" y="{y}" width="{w}" height="{h}" fill="{LINE}"/>')
+    m = h - 2 * h * 0.12
+    mark(x + h * 0.12, y + h * 0.12, m, BG, LINE)
+    size = h * 0.5
+    text(x + h * 1.05, y + h * 0.56, NAME, BG, size, spacing=size * 0.04)
+    text(x + h * 1.08, y + h * 0.84, "STATION SYSTEMS", BG, h * 0.13, spacing=h * 0.035)
 
-# --- lower left: numbered unit list ---
-ly = MID_Y + 60
-text(L + 70, ly, "OPERATIONAL NOTIFICATIONS", LINE, 24, spacing=5)
-split(SPLIT_X - 116, ly - 34, 46)
-units = (("CORE", "ONLINE - LOAD NOMINAL", LINE), ("STORE", "MOUNTED - 71.0% FREE", LINE),
-         ("LINK", "X OFFLINE X - NO SIGNAL", v["alert"]), ("POWER", "BUS A - HOLDING", LINE))
+
+# --- upper left: the wall status board ---
+px, py = L + 70, T + 50
+name_plate(px, py, 640, 170)
+text(px, py + 200, "A WORKING CONSOLE FOR ONE OPERATOR.  ALL UNITS REPORT TO THIS DESK.", MUTED, 13, spacing=2)
+text(px, py + 236, "DESK 14  -  OPERATIONAL NOTIFICATIONS", LINE, 19, spacing=5)
+split(px + 760, py + 4, 34)
+text(px + 808, py + 30, "SUPPORT DUE", LINE, 22, spacing=4)
+box(px + 760, py + 56, SPLIT_X - 70 - px - 760, 114, DIM, 2, v["panel"])
+text(px + 790, py + 146, "03 15 :", v["warn"], 84, spacing=10)
+units = (("CORE", "STALLED - OFFLINE CODE 5.12.26-", v["warn"]), ("STORE", "KM -LOADING- 18.5%  F-SET 2", v["warn"]),
+         ("LINK", "X OFFLINE X - NO SIGNAL", v["alert"]), ("POWER", "KM -LOADING- 71.0%  F-SET 8", v["warn"]))
 for i, (unit, state, colour) in enumerate(units):
-    yy = ly + 44 + i * 82
-    text(L + 70, yy + 42, unit, colour, 17)
-    text(L + 290, yy + 50, f"{i + 1:02d}", colour, 44, "end", 0)
-    split(L + 310, yy + 10, 46, flip=i % 2 == 1, colour=colour)
-    box(L + 380, yy + 4, SPLIT_X - L - 450, 58, DIM, 2, v["panel"])
-    text(L + 404, yy + 46, state, colour, 32, spacing=4)
+    yy = py + 266 + i * 84
+    text(px + 110, yy + 42, unit, LINE, 15, "end")
+    text(px + 126, yy + 48, f"{i + 1:02d}", colour, 40, spacing=0)
+    split(px + 226, yy + 8, 44, flip=i % 2 == 1, colour=colour)
+    box(px + 290, yy + 2, SPLIT_X - 70 - px - 290, 58, DIM, 2, v["panel"])
+    text(px + 312, yy + 44, state, colour, 31, spacing=4)
 
-# --- lower right: sequence strip and archive block ---
-sx, sy = SPLIT_X + 70, MID_Y + 190
+# --- lower left: the cycle log ---
+gx, gy = L + 70, MID_Y + 76
+text(gx, gy, "OPERATOR 3 CYCLE LOG", LINE, 34, spacing=6)
 months = "DEC NOV OCT SEP AUG JUL JUN MAY APR MAR FEB JAN".split()
-pick_m, pick_d = rnd.randrange(12), rnd.randint(1, 31)
-plate(sx, sy - 30, 142, 38, "CYCLE 3", 17)
-for i, mth in enumerate(months):
-    x = sx + 170 + i * 52
-    if i == pick_m:
-        plate(x - 7, sy - 30, 52, 38, mth, 14)
+for row in range(3):
+    y = gy + 46 + row * 34
+    if row == 0:
+        plate(gx - 6, y - 23, 150, 30, "CYCLE 3", 17)
     else:
-        text(x, sy - 5, mth, LINE, 14, spacing=0)
+        text(gx + 3, y, f"CYCLE {3 - row}", LINE, 17, spacing=3)
+    for i, mth in enumerate(months):
+        x = gx + 180 + i * 72
+        if row == 0 and i == 0:
+            plate(x - 8, y - 23, 66, 30, mth, 17)
+        else:
+            text(x, y, mth, LINE, 17, spacing=1)
+text(gx, gy + 172, "RESTRICTED - PASSWORD REQUIRED", LINE, 31, spacing=6)
+add(f'<rect x="{gx + 430}" y="{gy + 192}" width="380" height="40" fill="{LINE}"/>')
+for i in range(6):
+    add(f'<rect x="{gx + 446 + i * 12}" y="{gy + 200}" width="6" height="24" fill="{BG}"/>')
+add(f'<path d="M{gx + 530} {gy + 212}H{gx + 590}M{gx + 610} {gy + 212}H{gx + 650}" stroke="{BG}" stroke-width="5"/>')
+add(f'<path d="M{gx} {gy + 250}H{SPLIT_X - 70}" stroke="{DIM}" stroke-width="2"/>')
+add(f'<rect x="{gx}" y="{gy + 270}" width="36" height="70" fill="{LINE}"/>')
+text(gx + 90, gy + 292, "BACK", LINE, 17, spacing=3)
+pick_d = 14
 for d in range(1, 32):
-    x = sx + 4 + ((d - 1) % 16) * 49
-    y = sy + 62 + ((d - 1) // 16) * 44
+    x = gx + 250 + ((d - 1) % 16) * 56
+    y = gy + 300 + ((d - 1) // 16) * 34
     if d == pick_d:
-        plate(x - 7, y - 26, 46, 36, f"{d:02d}", 18)
+        plate(x - 7, y - 23, 44, 30, f"{d:02d}", 17)
     else:
-        text(x, y, f"{d:02d}", LINE, 18, spacing=0)
-add(f'<path d="M{sx} {sy + 132}H{R - 70}" stroke="{DIM}" stroke-width="2"/>')
-box(sx, sy + 160, 270, 150, LINE, 2)
-add(f'<path d="M{sx + 84} {sy + 160}V{sy + 310}" stroke="{LINE}" stroke-width="2"/>')
-add(f'<rect x="{sx + 18}" y="{sy + 190}" width="48" height="30" fill="{LINE}"/>')
-text(sx + 42, sy + 280, "QC", LINE, 20, "middle")
-text(sx + 177, sy + 196, "ARCHIVAL", LINE, 17, "middle")
-text(sx + 177, sy + 222, "RECORD", LINE, 17, "middle")
-add(f'<rect x="{sx + 104}" y="{sy + 240}" width="146" height="32" fill="{LINE}"/>')
-small_print(sx + 104, sy + 292, 1, 1, MUTED, 11)
-mark(sx + 300, sy + 176, 118)
-plate(sx + 430, sy + 176, R - 70 - sx - 430 - 120, 118, NAME, 36, anchor="middle")
-checker(R - 70 - 100, sy + 185, 100, 3)
+        text(x, y, f"{d:02d}", LINE, 17, spacing=1)
+by = gy + 370
+box(gx, by, 330, 140, LINE, 2)
+add(f'<path d="M{gx + 90} {by}V{by + 140}" stroke="{LINE}" stroke-width="2"/>')
+add(f'<rect x="{gx + 20}" y="{by + 30}" width="50" height="30" fill="{LINE}"/>')
+text(gx + 45, by + 112, "QC", LINE, 20, "middle")
+text(gx + 210, by + 34, "ARCHIVAL", LINE, 19, "middle")
+text(gx + 210, by + 60, "PLAYBACK", LINE, 19, "middle")
+add(f'<rect x="{gx + 112}" y="{by + 74}" width="196" height="32" fill="{LINE}"/>')
+small_print(gx + 112, by + 126, 1, 2, MUTED, 9)
+bx0, bw = gx + 350, SPLIT_X - 70 - gx - 350
+box(bx0, by, bw, 140, LINE, 2)
+split(bx0 + 22, by + 18, 28)
+split(bx0 + 22, by + 94, 28, flip=True)
+small_print(bx0 + 70, by + 34, 3, 2, MUTED, 10, 16)
+text(bx0 + bw - 190, by + 30, "4401-6U4", LINE, 15, "end")
+name_plate(bx0 + bw - 176 - 460, by + 44, 460, 84)
+checker(bx0 + bw - 150, by + 20, 100, 3)
+
+# --- upper right: the eight-sided countdown frame ---
+ox, oy, ow, oh = SPLIT_X + 100, T + 106, R - SPLIT_X - 200, 450
+text(ox + ow / 2 - 60, oy - 28, "DESK 14", LINE, 21, "end")
+text(ox + ow - 30, oy - 28, "00-TRAQ", LINE, 21, "end")
+add(f'<rect x="{ox}" y="{oy}" width="{ow}" height="{oh}" fill="{LINE}"/>')
+octagon(ox + 14, oy + 14, ow - 28, oh - 28, 96, BG, 0, BG)
+octagon(ox + 34, oy + 34, ow - 68, oh - 68, 84, LINE, SW + 2)
+text(ox + ow / 2, oy + 104, "STANDBY", LINE, 60, "middle", 4)
+text(ox + ow / 2, oy + 142, "ALL UNITS ACCOUNTED FOR", LINE, 17, "middle", 4)
+add(f'<path d="M{ox + 34} {oy + 162}H{ox + ow - 34}M{ox + 34} {oy + 318}H{ox + ow - 34}" '
+    f'stroke="{LINE}" stroke-width="{SW + 2}"/>')
+text(ox + 70, oy + 280, "00:", LINE, 100, spacing=0)
+text(ox + 346, oy + 274, "00:", LINE, 58, spacing=0)
+plate(ox + 506, oy + 216, 124, 70, "00", 52, anchor="middle")
+text(ox + 250, oy + 308, "HOUR", LINE, 12, "middle")
+text(ox + 400, oy + 308, "MIN", LINE, 12, "middle")
+checker(ox + ow / 2 - 18, oy + 330, 36)
+text(ox + ow / 2, oy + 400, "LINK ESTABLISHED", LINE, 19, "middle", 4)
+split(ox - 64, oy + oh / 2 - 23, 46)
+split(ox + ow + 18, oy + oh / 2 - 23, 46, flip=True)
+text(ox + ow / 2, oy + oh + 62, "COM . NAV", LINE, 38, "middle", 6)
+
+# --- lower right: side list, numbered keys, log entry and meters ---
+rx, ry = SPLIT_X + 60, MID_Y + 60
+groups = (("RANGE", "RELAYS", "DATA LINK", "PATCH SYS", "PATCH NAV"), ("COLD BOOT", "SEMI AUTO"),
+          ("SEARCH", "IR SWEEP", "UV SWEEP", "PATCH IR DATA"), ("FLARE WATCH", "DIAGNOSTIC"))
+y = ry
+for group in groups:
+    for word in group:
+        text(rx + 270, y, word, LINE, 16, "end", 2)
+        y += 26
+    y += 22
+add(f'<path d="M{rx + 296} {MID_Y}V{B}M{rx + 400} {MID_Y}V{B}" stroke="{LINE}" stroke-width="{SW}"/>')
+for i, code in enumerate(("01", "11", "22")):
+    ky = ry - 24 + i * 96
+    split(rx + 318, ky, 60, flip=i == 0)
+    text(rx + 374, ky + 78, code, LINE, 13, "end", 0)
+checker(rx + 318, ry + 290, 60, 3)
+vx, vw = rx + 440, R - 60 - rx - 440
+for bx in (vx, vx + vw - 22):
+    add(f'<rect x="{bx}" y="{ry - 20}" width="22" height="36" fill="{LINE}"/>')
+    add(f'<rect x="{bx}" y="{ry + 40}" width="22" height="70" fill="{LINE}"/>')
+text(vx + vw / 2, ry + 50, "VIEW LOG ENTRY", LINE, 21, "middle", 2)
+text(vx + vw / 2, ry + 92, "CYCLE 03 DESK 14", LINE, 15, "middle", 3)
+for i in range(4):
+    mx = vx + 30 + i * 105
+    box(mx - 15, ry + 160, 70, 200, LINE, 2)
+    level = rnd.uniform(0.2, 0.95)
+    add(f'<rect x="{mx - 6}" y="{ry + 160 + 191 - 182 * level:.0f}" width="52" height="{182 * level:.0f}" '
+        f'fill="{LINE}"/>')
+    text(mx + 20, ry + 388, ("AV", "COM", "NAV", "ENV")[i], LINE, 16, "middle")
+name_plate(vx, ry + 424, vw, 84)
 
 add("</g>")
 if v.get("scanlines") == "yes":
