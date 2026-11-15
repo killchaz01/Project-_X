@@ -28,9 +28,9 @@ The other three themes, `rover`, `board` and `daylight`:
 |---|---|
 | Typeface | Michroma, a wide square sans, used for everything except the terminal. It ships in `rootfs/usr/share/fonts/truetype/opivy/` under the SIL Open Font License. |
 | Menu bar | Square outlined blocks. The system button is a lit plate with dark lettering. The clock sits in an eight-sided frame. A block lights up when the pointer is on it. |
-| Dock | Numbered square keys, each with a split-square marker. `hudctl set dock_numbers no` gives plain labels. |
+| Dock | App icons in square frames, like a Mac dock; the app's name shows when the pointer rests on it. Open windows follow after a gap. `hudctl set dock_style labels` gives numbered word keys instead. |
 | Application Center | A grid of numbered keys. Bright keys are installed apps; dim keys can be installed. |
-| Wallpaper | A generated console in four panels: a status board with numbered units, a cycle log with month and day strips, an eight-sided countdown frame, and a side list with numbered keys and meters. It is redrawn in the colours of whichever theme is active. |
+| Wallpaper | Calm by default: a faint grid, the OP IVY plate in the middle and a few markers, so windows, the menu bar and the dock stand out. `hudctl set wallpaper_style console` gives a busy station console instead (status board, cycle log, countdown frame, side list) drawn from the reference film screens. Both are redrawn in the colours of the active theme. |
 | Icons | Folders and files as square plates with the same markers. |
 | Windows | Square corners, a thin frame, no shadow. |
 | Themes | `station` (white on black, the default), `rover` (pale cyan on dark teal), `board` (amber on black), `daylight` (black on white). |
@@ -48,7 +48,7 @@ internals.
 |---|---|
 | Menu bar | Bar at the top: system menu, window title, hardware read-outs, preference blocks, clock |
 | Apple menu | The button at the top left |
-| Dock | Dock at the bottom: pinned launcher tiles, then open windows |
+| Dock | Dock at the bottom: pinned app icons, then open windows |
 | Launchpad, App Store | Application Center: the APPS tile, or Cmd+A |
 | Spotlight (Cmd+Space) | Launcher, Cmd+Space |
 | Close, minimise, zoom at top left | Same place (can be moved right) |
@@ -92,7 +92,7 @@ and `hudctl set bar_prefs ...`; more are listed in
 
 ## Application Center
 
-Open it from the APPS tile in the dock, Cmd+A, or the system menu.
+Open it from the grid icon at the left of the dock, Cmd+A, or the system menu.
 
 - **Apps**: every installed app as a numbered key. Click one to start it;
   type to filter.
@@ -143,7 +143,10 @@ hudctl set window_buttons right # window buttons on the right
 hudctl set bar_right clock      # choose which read-outs the bar shows
 hudctl set dock_apps 'APPS:hud-center apps,TERM:foot,MAIL:thunderbird'
 hudctl set wallpaper ~/Pictures/photo.jpg    # or "generated"
-hudctl set wallpaper_seed 12    # different small print and meter levels
+hudctl set wallpaper_style console   # the busy console picture (or calm)
+hudctl set dock_style labels    # word keys in the dock instead of icons
+hudctl set dock_icons 'MAIL:thunderbird'   # choose a dock icon by label
+hudctl set wallpaper_seed 12    # different small print (console style)
 hudctl unset line               # back to the default
 hudctl module                   # list the parts of the desktop
 hudctl module off dock          # switch a part off (or on)
@@ -246,6 +249,27 @@ desktop starts.
 
 Then run `sudo ./build.sh clean && sudo ./build.sh`.
 
+## What has been tested
+
+The ISO was built and run in a QEMU virtual machine (BIOS firmware,
+software emulation; UEFI not yet tested). Checked there:
+
+- GRUB starts the live system; it logs in by itself and the desktop starts.
+- No failed services. Window manager, menu bar, dock, wallpaper,
+  notifications, idle lock, network applet and PipeWire all run.
+- Wired network, name lookup and web access work. The sound card is found
+  and the volume block shows its level.
+- Cmd+Return opens a terminal, Cmd+Space the launcher.
+- Switching theme recolours the bar, dock and wallpaper at once.
+- Installing an app with apt works, and the Catalogue then shows it as
+  installed.
+- `install-to-disk` partitions, copies and installs GRUB; the installed
+  disk boots to the login prompt, and logging in starts the desktop.
+
+Not yet tried on real hardware: Wi-Fi, Bluetooth devices, laptop
+brightness and battery, suspend, and graphics chips other than the
+virtual one.
+
 ## Limits of 0.1
 
 - `amd64` only. Apple Silicon Macs need an ARM build, which would run in a
@@ -269,7 +293,7 @@ Then run `sudo ./build.sh clean && sudo ./build.sh`.
 
 1. Graphical login screen.
 2. Live desktop panels (system read-outs, feeds) as optional modules.
-3. A custom dock with running-app indicators.
+3. A dock that merges pinned apps with running ones and marks running apps with a dot.
 4. ARM64 build for virtual machines on Apple Silicon.
 5. Installer options: encryption, keeping an existing OS.
 
