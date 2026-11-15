@@ -82,6 +82,12 @@ stage_configure() {
     rm -rf "$ROOT/tmp/build"
     mkdir -p "$ROOT/tmp/build/overlay/etc/hud"
     cp -a "$HERE/rootfs/." "$ROOT/tmp/build/overlay/"
+    # The overlay is copied onto / with cp -a, which also applies its owner
+    # and modes to existing folders such as /etc and /usr. A checkout
+    # belongs to whoever cloned it (on GitHub, the runner's user), so make
+    # everything root's and writable only by root before it goes in.
+    chown -R 0:0 "$ROOT/tmp/build/overlay"
+    chmod -R u+rwX,go+rX,go-w "$ROOT/tmp/build/overlay"
     palette > "$ROOT/tmp/build/overlay/etc/hud/palette"
     palette_as vtrgb > "$ROOT/tmp/build/overlay/etc/hud/vtrgb"
     cp "$HERE/config/packages.list" "$HERE/config/chroot-setup.sh" "$ROOT/tmp/build/"
