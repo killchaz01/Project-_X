@@ -53,7 +53,7 @@ def rgb(v, key, fallback="#e9f6fa"):
 
 
 def run(command):
-    subprocess.Popen(command, shell=True, start_new_session=True,
+    subprocess.Popen(command, shell=True, start_new_session=True, cwd=os.path.expanduser("~"),
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
@@ -116,7 +116,8 @@ class Dock(Gtk.Window):
         GtkLayerShell.set_exclusive_zone(self, PANEL_H + 4)
 
         self.area = Gtk.DrawingArea()
-        self.area.add_events(Gdk.EventMask.POINTER_MOTION_MASK | Gdk.EventMask.BUTTON_RELEASE_MASK |
+        self.area.add_events(Gdk.EventMask.POINTER_MOTION_MASK | Gdk.EventMask.BUTTON_PRESS_MASK |
+                        Gdk.EventMask.BUTTON_RELEASE_MASK |
                              Gdk.EventMask.LEAVE_NOTIFY_MASK)
         self.area.connect("draw", self.draw)
         self.area.connect("motion-notify-event", lambda _w, e: self.set_hover(self.item_at(e.x, e.y)))
@@ -144,7 +145,7 @@ class Dock(Gtk.Window):
                 keys += [entry["id"], entry["wmclass"], entry["id"].split(".")[-1]]
             if any(w in hudapps.COMMAND_ICONS for w in command.split()):
                 keys = [w for w in command.split() if w in hudapps.COMMAND_ICONS]
-            title = hudapps.APP_TITLES.get(label, entry["name"] if entry else label.title())
+            title = hudapps.APP_TITLES.get(label) or hudapps.app_name(entry["id"] if entry else exe, self.apps)
             it = Item(title, command, hudapps.app_icon(command), keys, True, label)
             it.load_icon(self.v)
             pins.append(it)
@@ -160,7 +161,7 @@ class Dock(Gtk.Window):
             if owner is None:
                 if app_id not in extra:
                     entry = hudapps.find_entry(app_id, self.apps)
-                    it = Item(entry["name"] if entry else app_id, entry["exec"].split("%")[0].strip()
+                    it = Item(hudapps.app_name(app_id, self.apps), entry["exec"].split("%")[0].strip()
                               if entry else app_id, (entry["icon"] if entry else "") or app_id,
                               [app_id], False)
                     it.load_icon(self.v)

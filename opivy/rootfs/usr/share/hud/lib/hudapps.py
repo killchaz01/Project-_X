@@ -56,6 +56,24 @@ def find_entry(key, apps=None):
     return None
 
 
+# Plain names for the bundled apps, as a Mac names its own (Terminal, not
+# the program's name). Keyed by app id or program name.
+FRIENDLY = {"foot": "Terminal", "footclient": "Terminal", "org.xfce.thunar": "Files", "thunar": "Files",
+            "org.xfce.mousepad": "Text Editor", "mousepad": "Text Editor", "org.gnome.epiphany": "Web",
+            "epiphany": "Web", "hud-center": "Application Center", "pavucontrol": "Sound",
+            "htop": "Activity Monitor", "wdisplays": "Displays", "blueman-manager": "Bluetooth"}
+
+
+def app_name(key, apps=None):
+    """The name to show for an app id or program: friendly, else the app's own."""
+    if not key:
+        return ""
+    if key.lower() in FRIENDLY:
+        return FRIENDLY[key.lower()]
+    entry = find_entry(key, apps)
+    return entry["name"] if entry else key.split(".")[-1].capitalize()
+
+
 # Friendly names shown when the pointer rests on a dock icon.
 APP_TITLES = {"APPS": "Application Center", "TERM": "Terminal", "FILES": "Files", "WEB": "Web",
               "EDIT": "Text Editor", "SCAN": "System Scan", "MAIL": "Mail"}

@@ -32,8 +32,7 @@ app_name() {
 import sys
 sys.path.insert(0, "/usr/share/hud/lib")
 import hudapps
-e = hudapps.find_entry(sys.argv[1])
-print(e["name"] if e else sys.argv[1].split(".")[-1].capitalize())
+print(hudapps.app_name(sys.argv[1]))
 PY
 }
 
