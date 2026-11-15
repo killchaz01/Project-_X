@@ -463,9 +463,10 @@ class Center(Gtk.Window):
         number(f, "Gap around windows", "gap", 0, 30)
         toggle(f, "Natural scrolling", "natural_scroll")
         toggle(f, "Tap to click", "tap_to_click")
-        choice(f, "Dock shows", "dock_style", ["icons", "labels"])
+        choice(f, "Dock shows", "dock_style", ["labels", "icons"])
         toggle(f, "Numbered dock keys", "dock_numbers")
-        choice(f, "Wallpaper", "wallpaper_style", ["calm", "console"])
+        choice(f, "Wallpaper", "wallpaper_style", ["console", "calm"])
+        toggle(f, "Live console", "console_live")
 
         f = section("COLOURS")
         for key, text in (("bg", "Background"), ("panel", "Panels"), ("text", "Text"), ("line", "Lines"),

@@ -28,9 +28,9 @@ The other three themes, `rover`, `board` and `daylight`:
 |---|---|
 | Typeface | Michroma, a wide square sans, used for everything except the terminal. It ships in `rootfs/usr/share/fonts/truetype/opivy/` under the SIL Open Font License. |
 | Menu bar | Square outlined blocks. The system button is a lit plate with dark lettering. The clock sits in an eight-sided frame. A block lights up when the pointer is on it. |
-| Dock | App icons in square frames, like a Mac dock; the app's name shows when the pointer rests on it. Open windows follow after a gap. `hudctl set dock_style labels` gives numbered word keys instead. |
+| Dock | Numbered square keys (01 APPS, 02 TERM …), each with a split-square marker; open windows follow after a gap. `hudctl set dock_style icons` shows app icons instead, like a Mac dock. |
 | Application Center | A grid of numbered keys. Bright keys are installed apps; dim keys can be installed. |
-| Wallpaper | Calm by default: a faint grid, the OP IVY plate in the middle and a few markers, so windows, the menu bar and the dock stand out. `hudctl set wallpaper_style console` gives a busy station console instead (status board, cycle log, countdown frame, side list) drawn from the reference film screens. Both are redrawn in the colours of the active theme. |
+| Desktop | The live station console (see below): real read-outs, redrawn every second, and every panel clickable. `hudctl set wallpaper_style calm` gives a quiet grid with the name plate instead. Both follow the active theme. |
 | Icons | Folders and files as square plates with the same markers. |
 | Windows | Square corners, a thin frame, no shadow. |
 | Themes | `station` (white on black, the default), `rover` (pale cyan on dark teal), `board` (amber on black), `daylight` (black on white). |
@@ -48,7 +48,7 @@ internals.
 |---|---|
 | Menu bar | Bar at the top: system menu, window title, hardware read-outs, preference blocks, clock |
 | Apple menu | The button at the top left |
-| Dock | Dock at the bottom: pinned app icons, then open windows |
+| Dock | Dock at the bottom: numbered app keys, then open windows |
 | Launchpad, App Store | Application Center: the APPS tile, or Cmd+A |
 | Spotlight (Cmd+Space) | Launcher, Cmd+Space |
 | Close, minimise, zoom at top left | Same place (can be moved right) |
@@ -90,9 +90,36 @@ themselves. Choose and order the blocks with `hudctl set bar_hardware ...`
 and `hudctl set bar_prefs ...`; more are listed in
 `/usr/share/hud/defaults.conf`.
 
+## The station console
+
+The desktop itself is a working console, drawn by `hud-console` under all
+windows and redrawn every second. Click any panel; the pointer turns into a
+hand over the clickable parts and a tooltip says what each one does.
+
+| Panel | Shows | Click |
+|---|---|---|
+| Name plate (top left) | | system menu |
+| STATION TIME | the time | three-month calendar |
+| 01 CORE | processor load, number of cores | process list |
+| 02 STORE | disk use and free space | file manager |
+| 03 LINK | network interface and address, or X OFFLINE X | network settings |
+| 04 POWER | battery and charging, or uptime on mains | lock, log out, restart, shut down |
+| Status frame (top right) | STANDBY or WORKING, failed services, uptime, link | system scan |
+| COM . NAV | | network settings |
+| CYCLE LOG | this month and today, in a three-year strip | the year's calendar |
+| LOCK STATION | | lock the screen |
+| QC | | screenshot |
+| ARCHIVAL PLAYBACK | | Videos folder |
+| Function list | NETWORK, BLUETOOTH, SOUND, DISPLAYS, UPDATE SYS, POWER MENU, LOCK, SEARCH, FILES, TERMINAL, APP CENTER, ALERTS, DIAGNOSTIC | each opens what it names |
+| MUTE / THEME / PREFS keys | MUTE is lit while sound is muted | mute, change theme, Control Center |
+| VIEW LOG ENTRY | today's date | system log |
+| Meters | CPU, memory, disk, network | process list |
+
+Right-click anywhere on the console for the system menu.
+
 ## Application Center
 
-Open it from the grid icon at the left of the dock, Cmd+A, or the system menu.
+Open it from the 01 APPS key in the dock, Cmd+A, or the system menu.
 
 - **Apps**: every installed app as a numbered key. Click one to start it;
   type to filter.
@@ -143,10 +170,10 @@ hudctl set window_buttons right # window buttons on the right
 hudctl set bar_right clock      # choose which read-outs the bar shows
 hudctl set dock_apps 'APPS:hud-center apps,TERM:foot,MAIL:thunderbird'
 hudctl set wallpaper ~/Pictures/photo.jpg    # or "generated"
-hudctl set wallpaper_style console   # the busy console picture (or calm)
-hudctl set dock_style labels    # word keys in the dock instead of icons
+hudctl set wallpaper_style calm # quiet desktop instead of the console
+hudctl set console_live no      # console as a still picture, no clicks
+hudctl set dock_style icons     # app icons in the dock instead of keys
 hudctl set dock_icons 'MAIL:thunderbird'   # choose a dock icon by label
-hudctl set wallpaper_seed 12    # different small print (console style)
 hudctl unset line               # back to the default
 hudctl module                   # list the parts of the desktop
 hudctl module off dock          # switch a part off (or on)

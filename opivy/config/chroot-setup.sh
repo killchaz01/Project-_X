@@ -56,7 +56,9 @@ update-locale LANG=en_US.UTF-8
 echo "== users"
 # Live-session account. install-to-disk replaces it with your own.
 for g in audio video plugdev netdev input; do groupadd -f "$g"; done
-id live >/dev/null 2>&1 || useradd -m -s /bin/bash -G sudo,audio,video,plugdev,netdev,input live
+id live >/dev/null 2>&1 || useradd -m -s /bin/bash live
+# adm lets the user read the system log (the console's VIEW LOG ENTRY panel).
+usermod -aG sudo,adm,audio,video,plugdev,netdev,input live
 echo 'live:live' | chpasswd
 passwd -l root >/dev/null
 cp /etc/skel/.bashrc /etc/skel/.profile /root/
