@@ -15,12 +15,13 @@
     <font name="{{font_ui}}" size="{{font_size}}" weight="bold"/>
     <dropShadows>{{window_shadows}}</dropShadows>
   </theme>
-  <windowSwitcher show="yes" preview="yes" outlines="yes"/>
+  <windowSwitcher preview="yes" outlines="yes"><osd show="yes"/></windowSwitcher>
   <keyboard>
     <default/>
     <!-- The Super key is Command on a Mac keyboard. -->
     <keybind key="W-space"><action name="Execute" command="fuzzel"/></keybind>
     <keybind key="W-Return"><action name="Execute" command="{{terminal}}"/></keybind>
+    <keybind key="W-a"><action name="Execute" command="hud-center apps"/></keybind>
     <keybind key="W-q"><action name="Close"/></keybind>
     <keybind key="W-w"><action name="Close"/></keybind>
     <keybind key="W-m"><action name="Iconify"/></keybind>
@@ -30,7 +31,7 @@
     <keybind key="W-C-f"><action name="ToggleFullscreen"/></keybind>
     <keybind key="W-Up"><action name="ToggleMaximize"/></keybind>
     <keybind key="W-C-q"><action name="Execute" command="swaylock -f"/></keybind>
-    <keybind key="W-comma"><action name="Execute" command="hud-menu settings"/></keybind>
+    <keybind key="W-comma"><action name="Execute" command="hud-center prefs"/></keybind>
     <keybind key="W-S-3"><action name="Execute" command="hud-menu screenshot"/></keybind>
     <keybind key="W-S-4"><action name="Execute" command="hud-menu screenshot-area"/></keybind>
     <keybind key="Print"><action name="Execute" command="hud-menu screenshot"/></keybind>

@@ -2,7 +2,7 @@
   "layer": "top",
   "position": "{{dock_position}}",
   "spacing": 0,
-  "margin": "0 0 6 0",
+  "margin": "0 0 4 0",
   "modules-center": {{dock_modules}},
   {{dock_pins}}
   "wlr/taskbar": {

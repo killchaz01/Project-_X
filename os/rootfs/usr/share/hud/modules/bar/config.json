@@ -7,29 +7,58 @@
   "modules-center": {{bar_center_json}},
   "modules-right": {{bar_right_json}},
 
+  "group/hardware": { "orientation": "inherit", "modules": {{bar_hardware_json}} },
+  "group/prefs": { "orientation": "inherit", "modules": {{bar_prefs_json}} },
+
   "custom/menu": { "format": "{{logo_text}}", "on-click": "hud-menu", "tooltip": false },
   "custom/title": { "exec": "hud-menu title", "interval": 1, "format": "{}", "tooltip": false },
   "clock": { "format": "{:{{clock_format}}}", "tooltip-format": "<tt>{calendar}</tt>" },
   "tray": { "spacing": 8, "icon-size": 16 },
+
+  "cpu": { "format": "CPU {usage}%", "interval": 3, "on-click": "{{terminal}} -e htop" },
+  "cpu#load": { "format": "LOAD {load}", "interval": 5, "on-click": "{{terminal}} -e htop" },
+  "memory": { "format": "MEM {percentage}%", "interval": 5, "on-click": "{{terminal}} -e htop" },
+  "disk": { "format": "DISK {percentage_used}%", "path": "/", "interval": 60, "on-click": "thunar /" },
+  "temperature": { "format": "TEMP {temperatureC}C", "critical-threshold": 85, "interval": 5 },
+  "network#speed": {
+    "format": "IO {bandwidthTotalBytes}",
+    "format-disconnected": "NO LINK", "interval": 2, "tooltip-format": "{ifname} {ipaddr}"
+  },
+
   "network": {
     "format-wifi": "NET {essid} {signalStrength}%",
     "format-ethernet": "NET LINK",
     "format-linked": "NET NO ADDRESS",
     "format-disconnected": "NET OFFLINE",
-    "tooltip-format": "{ifname} {ipaddr}",
+    "tooltip-format": "{ifname} {ipaddr}\nClick: network settings",
     "on-click": "{{terminal}} -e nmtui"
+  },
+  "bluetooth": {
+    "format": "BT ON", "format-off": "BT OFF", "format-disabled": "BT OFF",
+    "format-connected": "BT {num_connections}",
+    "tooltip-format": "Click: switch on or off\nRight-click: devices",
+    "on-click": "hud-menu bluetooth", "on-click-right": "blueman-manager"
+  },
+  "backlight": {
+    "format": "LIGHT {percent}%", "tooltip-format": "Scroll to change brightness",
+    "on-scroll-up": "brightnessctl -q set 5%+", "on-scroll-down": "brightnessctl -q set 5%-"
   },
   "wireplumber": {
     "format": "VOL {volume}%", "format-muted": "VOL MUTE",
-    "on-click": "pavucontrol", "scroll-step": 5
+    "on-click": "pavucontrol", "on-click-right": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle",
+    "scroll-step": 5
   },
   "battery": {
     "format": "PWR {capacity}%", "format-charging": "PWR {capacity}% CHG",
     "format-plugged": "PWR {capacity}% AC",
     "states": { "warning": 25, "critical": 10 }
   },
-  "cpu": { "format": "CPU {usage}%", "interval": 3, "on-click": "{{terminal}} -e htop" },
-  "memory": { "format": "MEM {percentage}%", "interval": 5, "on-click": "{{terminal}} -e htop" },
-  "disk": { "format": "DISK {percentage_used}%", "path": "/" },
-  "temperature": { "format": "TEMP {temperatureC}C", "critical-threshold": 85 }
+  "custom/alerts": {
+    "exec": "hud-menu alerts", "return-type": "json", "interval": "once", "signal": 8,
+    "on-click": "hud-menu alerts-toggle", "tooltip": false
+  },
+  "custom/theme": { "format": "{{current_theme}}", "on-click": "hud-menu theme", "tooltip": false },
+  "custom/display": { "format": "DISPLAY", "on-click": "wdisplays", "tooltip": false },
+  "custom/prefs": { "format": "PREFS", "on-click": "hud-center prefs", "tooltip": false },
+  "custom/power": { "format": "POWER", "on-click": "hud-menu power", "tooltip": false }
 }

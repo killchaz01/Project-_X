@@ -2,7 +2,7 @@
 # the whole system: boot menu, login banner, menu bar, wallpaper, ISO file.
 OS_NAME="Apsis OS"
 OS_ID="apsis"
-OS_VERSION="0.2"
+OS_VERSION="0.3"
 OS_CODENAME="First Light"
 # Theme whose colours are used for the text console and boot messages.
 CONSOLE_THEME="orbital"

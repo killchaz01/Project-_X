@@ -2,12 +2,13 @@
 <!-- Right-click on the desktop. -->
 <openbox_menu>
   <menu id="root-menu" label="">
-    <item label="Open Launcher"><action name="Execute" command="fuzzel"/></item>
+    <item label="Application Center"><action name="Execute" command="hud-center apps"/></item>
+    <item label="Search Apps"><action name="Execute" command="fuzzel"/></item>
     <item label="Terminal"><action name="Execute" command="{{terminal}}"/></item>
     <item label="Files"><action name="Execute" command="thunar"/></item>
     <separator/>
     <item label="System Menu"><action name="Execute" command="hud-menu"/></item>
     <item label="Change Theme"><action name="Execute" command="hud-menu theme"/></item>
-    <item label="Settings"><action name="Execute" command="hud-menu settings"/></item>
+    <item label="Control Center"><action name="Execute" command="hud-center prefs"/></item>
   </menu>
 </openbox_menu>

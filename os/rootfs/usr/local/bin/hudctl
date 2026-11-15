@@ -118,7 +118,15 @@ def derive(v):
     dark = v.get("scheme", "dark") != "light"
     v["prefer_dark"] = "1" if dark else "0"
     v["color_scheme"] = "prefer-dark" if dark else "prefer-light"
-    v["glow_px"] = "6" if v.get("glow") == "yes" else "0"
+    strength = int(v.get("glow_strength", "2") or 0) if v.get("glow") == "yes" else 0
+    v["glow_px"] = str((0, 5, 9, 14)[max(0, min(3, strength))])
+    v["glow_wide"] = str(int(v["glow_px"]) * 2)
+    block = str(int(v.get("bar_height", "34")) - 4)
+    for ctx in ("menu", "hardware", "prefs", "clock"):
+        v["height_" + ctx] = block
+    v["height_dock"] = "46"
+    v["tile_w_dock"], v["tile_h_dock"] = "84", "74"
+    v["current_theme"] = v["theme"].upper()
 
     # Dock: turn "LABEL:command" entries into waybar custom modules.
     names, mods = [], {}
@@ -141,10 +149,134 @@ def derive(v):
     return v
 
 
+# ---------------------------------------------------------------- shapes
+# Frames are small SVG pictures drawn in the theme colours and stretched by
+# the toolkit, which is how blocks get shapes plain CSS cannot make.
+SHAPES = ("round", "cut", "tab", "hex", "slant", "pill", "bracket", "hexagon")
+
+
+def shape_points(shape, x0, y0, x1, y1, c):
+    """Outline of a shape inside the box x0,y0..x1,y1; c is the corner size."""
+    cy, h = (y0 + y1) / 2, y1 - y0
+    if shape == "cut":
+        return [(x0 + c, y0), (x1 - c, y0), (x1, y0 + c), (x1, y1 - c),
+                (x1 - c, y1), (x0 + c, y1), (x0, y1 - c), (x0, y0 + c)]
+    if shape == "tab":
+        return [(x0 + c, y0), (x1, y0), (x1, y1 - c), (x1 - c, y1), (x0, y1), (x0, y0 + c)]
+    if shape == "hex":
+        e = h * 0.36
+        return [(x0 + e, y0), (x1 - e, y0), (x1, cy), (x1 - e, y1), (x0 + e, y1), (x0, cy)]
+    if shape == "hexagon":
+        e = (x1 - x0) / 4
+        return [(x0 + e, y0), (x1 - e, y0), (x1, cy), (x1 - e, y1), (x0 + e, y1), (x0, cy)]
+    if shape == "slant":
+        e = h * 0.42
+        return [(x0 + e, y0), (x1, y0), (x1 - e, y1), (x0, y1)]
+    return None
+
+
+def shape_svg(shape, w, h, colour, fill, fill_opacity, stroke, glow, radius):
+    """One frame as SVG text. A margin is left around it for the glow."""
+    g = 2 + glow
+    x0, y0, x1, y1 = g, g, w - g, h - g
+    c = max(2, min(radius, (y1 - y0) * 0.32))
+    pts = shape_points(shape, x0, y0, x1, y1, c)
+    style = (f'fill="{fill}" fill-opacity="{fill_opacity}" stroke="{colour}" '
+             f'stroke-width="{stroke}" stroke-linejoin="round"')
+    if pts:
+        body = '<path d="M' + "L".join(f"{x:.1f},{y:.1f}" for x, y in pts) + f'Z" {style}/>'
+    elif shape == "bracket":
+        k = c + 3
+        body = (f'<rect x="{x0}" y="{y0}" width="{x1 - x0}" height="{y1 - y0}" fill="{fill}" '
+                f'fill-opacity="{fill_opacity}"/>'
+                f'<path d="M{x0},{y0 + k}V{y0}H{x0 + k}M{x1 - k},{y0}H{x1}V{y0 + k}'
+                f'M{x1},{y1 - k}V{y1}H{x1 - k}M{x0 + k},{y1}H{x0}V{y1 - k}" fill="none" '
+                f'stroke="{colour}" stroke-width="{stroke}" stroke-linecap="square"/>')
+    else:
+        r = (y1 - y0) / 2 if shape == "pill" else c
+        body = f'<rect x="{x0}" y="{y0}" width="{x1 - x0}" height="{y1 - y0}" rx="{r}" {style}/>'
+    blur = ""
+    if glow:
+        blur = (f'<filter id="g" x="-30%" y="-30%" width="160%" height="160%">'
+                f'<feGaussianBlur stdDeviation="{glow * 0.55:.1f}" result="b"/>'
+                f'<feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/>'
+                f'</feMerge></filter>')
+        body = f'<g filter="url(#g)">{body}</g>'
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" '
+            f'viewBox="0 0 {w} {h}">{blur}{body}</svg>')
+
+
+def frame_css(v, ctx, colour_key, filled):
+    """CSS that gives a block the shape chosen for its group (shape_CTX).
+
+    Blocks with a known height (height_CTX) get a picture cut in three
+    across; others get one cut in nine so it stretches both ways.
+    """
+    shape = v.get("shape_" + ctx, "round")
+    if shape not in SHAPES:
+        shape = "round"
+    colour = v[colour_key]
+    stroke = float(v.get("border_width", "2"))
+    glow = int(v["glow_px"]) // 3
+    radius = float(v.get("radius", "8"))
+    fill = colour if filled else v["panel"]
+    opacity = 1 if filled else 0.82
+    height = int(v.get("height_" + ctx, "0"))
+    g = 2 + glow
+
+    folder = os.path.join(USER, "shapes")
+    os.makedirs(folder, exist_ok=True)
+    name = f"{ctx}-{colour_key}{'-fill' if filled else ''}.svg"
+    path = os.path.join(folder, name)
+
+    if shape == "hexagon" and "tile_w_" + ctx in v:
+        w, h = int(v["tile_w_" + ctx]), int(v["tile_h_" + ctx])
+        svg = shape_svg(shape, w, h, colour, fill, opacity, stroke, glow, radius)
+        css = (f'background: url("{path}") center / {w}px {h}px no-repeat; border: none; '
+               f'min-width: {w}px; min-height: {h}px; padding: 0;')
+    elif height:
+        if shape == "hexagon":
+            shape = "hex"
+        edge = int(height / 2) + 2 if shape in ("hex", "slant", "pill") else int(radius) + g + 2
+        w = edge * 2 + 12
+        svg = shape_svg(shape, w, height, colour, fill, opacity, stroke, glow, radius)
+        # The ends come from the picture's left and right slices; the
+        # stretch between them is a second picture of just the middle.
+        mid = path[:-4] + "-mid.svg"
+        with open(mid, "w") as f:
+            f.write(svg.replace(f'width="{w}" height="{height}" viewBox="0 0 {w} {height}"',
+                                f'width="12" height="{height}" viewBox="{edge} 0 12 {height}" '
+                                f'preserveAspectRatio="none"'))
+        inner = 6 if shape == "slant" else max(0, 9 - edge // 2)
+        css = (f'background: url("{mid}") center / 100% 100% no-repeat; '
+               f'border-style: solid; border-color: transparent; border-width: 0 {edge}px; '
+               f'border-image: url("{path}") 0 {edge} / 0 {edge}px stretch; '
+               f'min-height: {height}px; padding: 0 {inner}px;')
+    else:
+        if shape in ("hex", "slant", "pill", "hexagon"):
+            shape = "cut"
+        edge = int(min(radius, 8)) + g + 1
+        w = edge * 3
+        svg = shape_svg(shape, w, w, colour, fill, opacity, stroke, glow, min(radius, 8))
+        # The picture supplies the outline; the middle is a plain colour
+        # kept inside the outline by clipping it to the padding box.
+        r, gr, b = (int(fill.lstrip("#")[i:i + 2], 16) for i in (0, 2, 4))
+        css = (f'background-image: none; background-color: rgba({r},{gr},{b},{opacity}); '
+               f'background-clip: padding-box; border-style: solid; '
+               f'border-color: transparent; border-width: {edge}px; '
+               f'border-image: url("{path}") {edge} / {edge}px stretch;')
+    with open(path, "w") as f:
+        f.write(svg)
+    return css
+
+
 def lookup(v, key):
     """Resolve {{key}} with optional suffix: _hex (no #), _rgb, _json."""
     if key in v:
         return v[key]
+    m = re.fullmatch(r"frame_([a-z]+)_([a-z_]+?)(_fill)?", key)
+    if m and m.group(2) in v:
+        return frame_css(v, m.group(1), m.group(2), bool(m.group(3)))
     for suffix in ("_hex", "_rgb", "_json"):
         if key.endswith(suffix) and key[: -len(suffix)] in v:
             raw = v[key[: -len(suffix)]]

@@ -23,20 +23,29 @@ headerbar, .titlebar, menubar, toolbar, .toolbar, actionbar, statusbar {
 }
 headerbar .title, .titlebar .title { color: {{title}}; }
 button {
-  background-image: none; background-color: {{panel}}; color: {{text}};
-  border: 1px solid {{line_dim}}; border-radius: {{radius}}px;
-  box-shadow: none; text-shadow: none;
+  color: {{text}}; box-shadow: none; text-shadow: none; padding: 0 6px; min-height: 18px;
+  {{frame_button_line_dim}}
 }
-button:hover { border-color: {{line}}; color: {{line}}; }
-button:active, button:checked { background-color: {{line}}; color: {{bg}}; border-color: {{line}}; }
-button.suggested-action { border-color: {{title}}; color: {{title}}; }
-button.destructive-action { border-color: {{alert}}; color: {{alert}}; }
+button:hover { color: {{line}}; {{frame_button_line}} }
+button:active, button:checked { color: {{bg}}; {{frame_button_line_fill}} }
+button.suggested-action { color: {{title}}; {{frame_button_title}} }
+button.suggested-action:hover { color: {{bg}}; {{frame_button_title_fill}} }
+button.destructive-action { color: {{alert}}; {{frame_button_alert}} }
+/* Small built-in buttons keep a plain outline. */
+button.titlebutton, spinbutton button, combobox button, scrollbar button, treeview button,
+notebook button, entry button, switch, button.flat, button.color, colorswatch {
+  border-image: none; background-color: {{panel}}; padding: 2px 6px; min-height: 0;
+  border: {{border_width}}px solid {{line_dim}}; border-radius: {{radius}}px;
+}
+switch { border-radius: 14px; }
+switch:checked { background-color: {{title}}; border-color: {{title}}; }
+switch slider { background-color: {{line}}; border-radius: 14px; border: none; min-width: 20px; min-height: 20px; }
 entry, spinbutton {
   background-image: none; background-color: {{panel}}; color: {{title}};
-  border: 1px solid {{line_dim}}; border-radius: {{radius}}px; box-shadow: none;
+  border: {{border_width}}px solid {{line_dim}}; border-radius: {{radius}}px; box-shadow: none;
   caret-color: {{title}};
 }
-entry:focus { border-color: {{title}}; }
+entry:focus { border-color: {{title}}; box-shadow: 0 0 {{glow_px}}px alpha({{title}}, 0.6); }
 .view, textview, textview text, treeview, iconview, list, listview, row {
   background-color: {{panel}}; color: {{text}};
 }
@@ -48,8 +57,8 @@ treeview header button { border-radius: 0; border-color: {{line_dim}}; color: {{
   background-color: {{line}}; color: {{bg}};
 }
 menu, .menu, popover, popover.background, .popup {
-  background-color: {{panel}}; color: {{text}}; border: 1px solid {{line}};
-  border-radius: {{radius}}px; box-shadow: none;
+  background-color: {{panel}}; color: {{text}}; border: {{border_width}}px solid {{line}};
+  border-radius: {{radius}}px; box-shadow: 0 0 {{glow_px}}px alpha({{line}}, 0.5);
 }
 menuitem:hover, modelbutton:hover { background-color: {{line}}; color: {{bg}}; }
 separator { background-color: {{line_dim}}; min-height: 1px; min-width: 1px; }

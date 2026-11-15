@@ -8,36 +8,25 @@
   box-shadow: none;
 }
 window#waybar { background: transparent; }
-tooltip { background: {{panel}}; border: 1px solid {{title}}; border-radius: {{radius}}px; }
+tooltip {
+  background: {{panel}}; border: {{border_width}}px solid {{title}}; border-radius: {{radius}}px;
+}
 tooltip label { color: {{title}}; }
 
-/* The dock itself is the centre group; the rest of the strip is see-through. */
-.modules-center {
-  background: alpha({{panel}}, 0.92);
-  border: 1px solid {{line}};
-  border-radius: {{radius}}px;
-  padding: 5px 6px;
-  box-shadow: 0 0 {{glow_px}}px alpha({{line}}, 0.35);
-}
+/* Pinned launchers: one framed tile each. */
 .modules-center .module {
-  margin: 0 3px;
-  padding: 6px 12px;
-  border: 1px solid {{alert}};
-  border-radius: {{radius}}px;
+  margin: 0 1px;
   color: {{alert}};
   letter-spacing: 2px;
-  text-shadow: 0 0 {{glow_px}}px alpha({{alert}}, 0.7);
+  text-shadow: 0 0 {{glow_px}}px alpha({{alert}}, 0.9), 0 0 {{glow_wide}}px alpha({{alert}}, 0.5);
+  {{frame_dock_alert}}
 }
-.modules-center .module:hover { background: {{alert}}; color: {{bg}}; text-shadow: none; }
+.modules-center .module:hover { color: {{bg}}; text-shadow: none; {{frame_dock_alert_fill}} }
 
-#taskbar { border: none; padding: 0; margin: 0 0 0 6px; }
-#taskbar:hover { background: transparent; }
-#taskbar button {
-  padding: 2px 6px;
-  margin: 0 2px;
-  border-radius: {{radius}}px;
-  border: 1px solid transparent;
-  border-bottom: 2px solid {{line_dim}};
-}
-#taskbar button:hover { background: alpha({{line}}, 0.25); }
-#taskbar button.active { border: 1px solid {{title}}; border-bottom: 2px solid {{title}}; }
+/* Open windows. */
+#taskbar { background: none; border: none; padding: 0; margin: 0 0 0 10px; min-width: 0; }
+#taskbar:hover { background: none; border: none; }
+#taskbar button { margin: 0 1px; {{frame_dock_line}} }
+#taskbar button box { margin: 0 0 0 24px; }
+#taskbar button:hover { {{frame_dock_warn}} }
+#taskbar button.active { {{frame_dock_title}} }

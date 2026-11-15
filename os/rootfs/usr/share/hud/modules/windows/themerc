@@ -1,6 +1,5 @@
 # Written by hudctl from the active theme.
-border.width: 1
-titlebar.height: 28
+border.width: {{border_width}}
 window.titlebar.padding.width: 8
 window.button.width: 22
 window.button.spacing: 2
@@ -19,12 +18,13 @@ window.active.button.close.unpressed.image.color: {{alert}}
 window.active.button.iconify.unpressed.image.color: {{warn}}
 window.active.button.max.unpressed.image.color: {{ok}}
 
-window.active.shadow.size: 40
-window.inactive.shadow.size: 24
-window.active.shadow.color: #00000080
-window.inactive.shadow.color: #00000050
+# With window_shadows on, the shadow is the frame's own colour: a halo.
+window.active.shadow.size: {{glow_wide}}
+window.inactive.shadow.size: {{glow_px}}
+window.active.shadow.color: {{line}}70
+window.inactive.shadow.color: {{line_dim}}50
 
-menu.border.width: 1
+menu.border.width: {{border_width}}
 menu.border.color: {{line}}
 menu.items.bg.color: {{panel}}
 menu.items.text.color: {{text}}
@@ -36,7 +36,7 @@ menu.title.text.color: {{title}}
 
 osd.bg.color: {{panel}}
 osd.border.color: {{line}}
-osd.border.width: 1
+osd.border.width: {{border_width}}
 osd.label.text.color: {{text}}
 osd.window-switcher.style-classic.item.active.border.color: {{title}}
 osd.window-switcher.preview.border.color: {{title}}
