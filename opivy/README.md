@@ -10,13 +10,17 @@ The build, the tools, the settings and the shortcuts are identical; only the
 themes, shapes, typeface, wallpaper, icons and boot text differ. The name is
 set in one place, `config/version`.
 
-![Desktop](docs/desktop.png)
+![Desktop: the live station console, Mac-style menu bar and dock](docs/desktop.png)
+
+![A window with red, yellow and green buttons; the menu bar names the app](docs/windows.png)
+
+![The app menu, opened from the app's name in the menu bar](docs/appmenu.png)
+
+![The system menu, like the Apple menu](docs/sysmenu.png)
 
 ![Application Center](docs/apps.png)
 
 ![Control Center](docs/prefs.png)
-
-![Files](docs/files.png)
 
 The other three themes, `rover`, `board` and `daylight`:
 
