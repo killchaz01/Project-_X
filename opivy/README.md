@@ -290,20 +290,31 @@ Then run `sudo ./build.sh clean && sudo ./build.sh`.
 
 ## What has been tested
 
-The ISO was built and run in a QEMU virtual machine (BIOS firmware,
-software emulation; UEFI not yet tested). Checked there:
+The ISO was built and run in a QEMU virtual machine (software emulation),
+with BIOS and with UEFI firmware. Checked there:
 
-- GRUB starts the live system; it logs in by itself and the desktop starts.
-- No failed services. Window manager, menu bar, dock, wallpaper,
+- GRUB starts the live system under BIOS and UEFI; it logs in by itself
+  and the desktop starts.
+- No failed services. Window manager, menu bar, live console, dock,
   notifications, idle lock, network applet and PipeWire all run.
+- The console shows the machine's real state (load, disk, network address,
+  uptime, date) and redraws every second; hovering outlines a panel and
+  names it; clicking a panel opens what it says.
+- Dock: clicking an app opens it, its running mark appears, the app in
+  front is marked, right-click gives the dock menu, and Quit closes the
+  app.
+- Menu bar: the front app's name opens the app menu, and Zoom maximises the
+  window between the bar and the dock. Right-clicking the desktop opens the
+  system menu; Restart asks for confirmation.
+- Red, yellow and green window buttons sit at the top left.
+- Cmd+Return opens a terminal, Cmd+Space search, Cmd+Q quits the app.
 - Wired network, name lookup and web access work. The sound card is found
   and the volume block shows its level.
-- Cmd+Return opens a terminal, Cmd+Space the launcher.
-- Switching theme recolours the bar, dock and wallpaper at once.
+- Switching theme recolours the bar, dock and desktop at once.
 - Installing an app with apt works, and the Catalogue then shows it as
   installed.
 - `install-to-disk` partitions, copies and installs GRUB; the installed
-  disk boots to the login prompt, and logging in starts the desktop.
+  disk boots under BIOS and under UEFI, and logging in starts the desktop.
 
 Not yet tried on real hardware: Wi-Fi, Bluetooth devices, laptop
 brightness and battery, suspend, and graphics chips other than the
