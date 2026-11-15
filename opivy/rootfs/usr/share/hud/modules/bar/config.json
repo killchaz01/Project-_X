@@ -35,6 +35,7 @@
   },
   "bluetooth": {
     "format": "BT ON", "format-off": "BT OFF", "format-disabled": "BT OFF",
+    "format-no-controller": "",
     "format-connected": "BT {num_connections}",
     "tooltip-format": "Click: switch on or off\nRight-click: devices",
     "on-click": "hud-menu bluetooth", "on-click-right": "blueman-manager"
