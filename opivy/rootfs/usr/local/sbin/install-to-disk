@@ -104,7 +104,7 @@ if [ -d /sys/firmware/efi/efivars ]; then
 fi
 
 chroot "$T" userdel -r live 2>/dev/null || true
-chroot "$T" useradd -m -s /bin/bash -G sudo,audio,video,plugdev,netdev "$USERNAME"
+chroot "$T" useradd -m -s /bin/bash -G sudo,audio,video,plugdev,netdev,input "$USERNAME"
 printf '%s:%s\n' "$USERNAME" "$PASSWORD" | chroot "$T" chpasswd
 
 say "INSTALLING BOOT LOADER"
