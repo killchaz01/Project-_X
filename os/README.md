@@ -157,25 +157,52 @@ change; new ones use the new theme.
 
 ## Get the ISO
 
-It targets 64-bit Intel/AMD machines (`amd64`), which includes Intel Macs.
-Apple Silicon Macs (M1 and later) cannot boot it; see Limits.
+There are two builds:
+
+| Build | For |
+|---|---|
+| `arm64` | Apple Silicon Macs (M1 and later), run in a virtual machine |
+| `amd64` | Intel and AMD PCs and Intel Macs, run directly or in a virtual machine |
 
 **From GitHub.** Each push that touches `os/` runs the "Build OS ISO"
-workflow. Download `os-iso` from the run's Artifacts.
+workflow. Download `os-iso-arm64` or `os-iso-amd64` from the run's Artifacts.
 
 **On a Linux machine (Debian or Ubuntu):**
 
 ```sh
 sudo apt install debootstrap squashfs-tools xorriso mtools dosfstools \
-                 grub-pc-bin grub-efi-amd64-bin grub-common
+                 grub-common grub-pc-bin grub-efi-amd64-bin   # on a PC
 cd os
 sudo ./build.sh          # result: out/apsis-0.3-amd64.iso (about 1.8 GB)
 ```
 
-On Debian, also install `ubuntu-keyring`. The build takes about ten minutes
-and needs 8 GB of free disk. `sudo ./build.sh clean` removes the build files.
+It builds for the kind of machine you run it on. To build the ARM image on a
+PC, also install `qemu-user-static` and run `sudo ARCH=arm64 ./build.sh`;
+that works through emulation and takes over an hour. On Debian, also
+install `ubuntu-keyring`. A normal build takes about ten minutes and needs
+8 GB of free disk. `sudo ./build.sh clean` removes the build files.
 
-## Try it
+## Run it on an Apple Silicon Mac
+
+Use the `arm64` ISO in a virtual machine. With UTM (free, from
+mac.getutm.app):
+
+1. Create a new virtual machine, choose **Virtualize**, then **Linux**.
+2. Choose the `arm64` ISO as the boot image.
+3. Give it at least 4 GB of memory and 4 processor cores, and a 32 GB disk.
+4. Start it. The desktop appears after the boot text.
+5. To keep it, open a terminal (TERM in the dock), run
+   `sudo install-to-disk`, choose the virtual disk, then shut down, remove
+   the ISO from the machine's drives in UTM, and start it again.
+
+The Mac's Command key is the Super key here, so the shortcuts in the table
+above match. UTM keeps a few for itself; its toolbar has a button to
+capture all keyboard input.
+
+Running directly on Apple Silicon hardware, without macOS underneath, is not
+supported; see Limits.
+
+## Try it on a PC or Intel Mac
 
 In a virtual machine (QEMU), giving it at least 4 GB of memory:
 
@@ -205,7 +232,8 @@ sudo install-to-disk
 
 It asks which disk, your login name, a password and a machine name, then
 asks you to type `ERASE` before it erases the **whole disk**. It does not set
-up dual boot. The installed system boots on BIOS and UEFI. After installing,
+up dual boot. The installed system boots on BIOS and UEFI PCs, and on UEFI
+ARM machines such as a UTM virtual machine. After installing,
 you log in by typing your name and password on a text screen, and the
 desktop starts.
 
@@ -222,14 +250,15 @@ Then run `sudo ./build.sh clean && sudo ./build.sh`.
 
 ## Limits of 0.3
 
-- `amd64` only. Apple Silicon Macs need an ARM build, which would run in a
-  virtual machine; running directly on that hardware also needs the Asahi
-  Linux boot chain.
+- On Apple Silicon it runs in a virtual machine only. Booting those Macs
+  directly needs the Asahi Linux boot chain and drivers, which this does
+  not include.
 - Intel Macs from 2018 to 2020 (T2 chip) need a patched kernel for the
   internal keyboard, trackpad and SSD; the stock kernel here lacks it.
 - Secure Boot must be off (the boot loader is not signed).
 - Login is a text prompt; there is no graphical login screen yet.
-- Windows and menus can only have rounded corners; the other shapes apply
+- Windows and menus can only have rounded corners, and on windows only the
+  top two; the other shapes apply
   to bar blocks, dock tiles, app buttons and icons.
 - Installing from the catalogue asks for your password in a terminal.
 - No global menu bar menus, no Mission Control, no Wi-Fi firmware for some
@@ -241,8 +270,7 @@ Then run `sudo ./build.sh clean && sudo ./build.sh`.
 1. Graphical login screen.
 2. Live desktop panels (system read-outs, feeds) as optional modules.
 3. A custom dock with running-app indicators.
-4. ARM64 build for virtual machines on Apple Silicon.
-5. Installer options: encryption, keeping an existing OS.
+4. Installer options: encryption, keeping an existing OS.
 
 ## Note
 

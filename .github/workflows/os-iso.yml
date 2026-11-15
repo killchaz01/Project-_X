@@ -9,7 +9,17 @@ on:
 
 jobs:
   iso:
-    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64          # Intel and AMD machines
+            runner: ubuntu-24.04
+            grub: grub-pc-bin grub-efi-amd64-bin
+          - arch: arm64          # Apple Silicon (in a virtual machine)
+            runner: ubuntu-24.04-arm
+            grub: grub-efi-arm64-bin
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
       - name: Install build tools
@@ -17,13 +27,13 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             debootstrap squashfs-tools xorriso mtools dosfstools \
-            grub-pc-bin grub-efi-amd64-bin grub-common
+            grub-common ${{ matrix.grub }}
       - name: Build ISO
         working-directory: os
         run: sudo ./build.sh
       - uses: actions/upload-artifact@v4
         with:
-          name: os-iso
+          name: os-iso-${{ matrix.arch }}
           path: os/out/
           compression-level: 0
           retention-days: 14

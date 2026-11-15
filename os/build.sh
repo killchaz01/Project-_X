@@ -3,6 +3,8 @@
 #
 #   sudo ./build.sh            build everything
 #   sudo ./build.sh clean      delete build/ and out/
+#   sudo ARCH=arm64 ./build.sh for ARM machines (Apple Silicon VMs); the
+#                              default is the machine you build on
 #
 # Stages (each one is a layer of the system):
 #   1 bootstrap   minimal Ubuntu LTS userland        -> build/rootfs
@@ -18,7 +20,17 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 BUILD=${BUILD_DIR:-$HERE/build}
 OUT=${OUT_DIR:-$HERE/out}
 SUITE=${SUITE:-resolute}          # Ubuntu 26.04 LTS
-MIRROR=${MIRROR:-http://archive.ubuntu.com/ubuntu}
+HOST_ARCH=$(dpkg --print-architecture)
+ARCH=${ARCH:-$HOST_ARCH}
+case $ARCH in
+    amd64) DEFAULT_MIRROR=http://archive.ubuntu.com/ubuntu
+           SECURITY=http://security.ubuntu.com/ubuntu       GRUB_EFI=x86_64-efi ;;
+    arm64) DEFAULT_MIRROR=http://ports.ubuntu.com/ubuntu-ports
+           SECURITY=http://ports.ubuntu.com/ubuntu-ports    GRUB_EFI=arm64-efi ;;
+    *)     echo "build.sh: ARCH must be amd64 or arm64" >&2; exit 1 ;;
+esac
+MIRROR=${MIRROR:-$DEFAULT_MIRROR}
+BUILD=$BUILD/$ARCH
 ROOT=$BUILD/rootfs
 ISO=$BUILD/iso
 
@@ -65,7 +77,7 @@ stage_bootstrap() {
     # release uses the same recipe ("gutsy"), so point at that.
     local script=/usr/share/debootstrap/scripts/$SUITE
     [ -e "$script" ] || script=/usr/share/debootstrap/scripts/gutsy
-    debootstrap --variant=minbase "$SUITE" "$ROOT" "$MIRROR" "$script"
+    debootstrap --arch="$ARCH" --variant=minbase "$SUITE" "$ROOT" "$MIRROR" "$script"
     touch "$ROOT/.bootstrapped"
 }
 
@@ -93,6 +105,8 @@ OS_CODENAME="$OS_CODENAME"
 PRETTY="$PRETTY"
 SUITE="$SUITE"
 MIRROR="$MIRROR"
+SECURITY="$SECURITY"
+ARCH="$ARCH"
 PALETTE="$(palette_as kernel)"
 ENV
     chroot "$ROOT" /bin/bash /tmp/build/chroot-setup.sh
@@ -114,25 +128,45 @@ stage_iso() {
     sed -e "s|@PRETTY@|$PRETTY|g" -e "s|@PALETTE@|$(palette_as kernel)|g" \
         "$HERE/iso/boot/grub/grub.cfg" > "$ISO/boot/grub/grub.cfg"
     mkdir -p "$OUT"
-    local iso="$OUT/$OS_ID-$OS_VERSION-amd64.iso"
-    # grub-mkrescue makes one image that boots from BIOS and UEFI, CD or USB.
-    grub-mkrescue -o "$iso" "$ISO" -- -volid "$(echo "$OS_ID" | tr a-z A-Z)" \
-        2>"$BUILD/grub-mkrescue.log" \
-        || { cat "$BUILD/grub-mkrescue.log"; die "grub-mkrescue failed"; }
+    local iso="$OUT/$OS_ID-$OS_VERSION-$ARCH.iso" label
+    label=$(echo "$OS_ID" | tr a-z A-Z)
+    # grub-mkrescue makes one image that boots from CD or USB: BIOS and UEFI
+    # on amd64, UEFI on arm64.
+    if [ -d "/usr/lib/grub/$GRUB_EFI" ]; then
+        grub-mkrescue -o "$iso" "$ISO" -- -volid "$label" 2>"$BUILD/grub-mkrescue.log" \
+            || { cat "$BUILD/grub-mkrescue.log"; die "grub-mkrescue failed"; }
+    else
+        # This machine has no GRUB for the target (building arm64 on a PC):
+        # use the GRUB inside the image we just built.
+        mkdir -p "$ROOT/mnt/iso" "$ROOT/mnt/out"
+        mount --bind "$ISO" "$ROOT/mnt/iso"; mount --bind "$OUT" "$ROOT/mnt/out"
+        mount -t proc proc "$ROOT/proc"; mount --bind /dev "$ROOT/dev"
+        chroot "$ROOT" grub-mkrescue -o "/mnt/out/$(basename "$iso")" /mnt/iso -- -volid "$label" \
+            2>"$BUILD/grub-mkrescue.log" || failed=1
+        umount -l "$ROOT/mnt/iso" "$ROOT/mnt/out" "$ROOT/proc" "$ROOT/dev"
+        [ -z "${failed:-}" ] || { cat "$BUILD/grub-mkrescue.log"; die "grub-mkrescue failed"; }
+    fi
     (cd "$OUT" && sha256sum "$(basename "$iso")" > "$(basename "$iso").sha256")
     log "done: $iso ($(du -h "$iso" | cut -f1))"
 }
 
 case "${1:-all}" in
     clean)
-        umount_all; rm -rf "$BUILD" "$OUT" ;;
+        umount_all; rm -rf "${BUILD%/*}" "$OUT" ;;
     all)
         [ "$(id -u)" -eq 0 ] || die "must run as root (sudo ./build.sh)"
-        for t in debootstrap mksquashfs xorriso grub-mkrescue mformat; do
+        for t in debootstrap mksquashfs; do
             command -v "$t" >/dev/null || die "missing tool: $t (see README.md)"
         done
-        [ -d /usr/lib/grub/x86_64-efi ] || die "missing grub-efi-amd64-bin"
-        [ -d /usr/lib/grub/i386-pc ]    || die "missing grub-pc-bin"
+        if [ "$ARCH" = "$HOST_ARCH" ]; then
+            for t in xorriso grub-mkrescue mformat; do
+                command -v "$t" >/dev/null || die "missing tool: $t (see README.md)"
+            done
+            [ -d "/usr/lib/grub/$GRUB_EFI" ] || die "missing grub-efi-$ARCH-bin"
+        else
+            ls /proc/sys/fs/binfmt_misc/ 2>/dev/null | grep -q qemu-aarch64 \
+                || die "building $ARCH on $HOST_ARCH needs qemu-user-static (see README.md)"
+        fi
         mkdir -p "$BUILD"
         stage_bootstrap; stage_configure; stage_image; stage_iso ;;
     *)

@@ -1,4 +1,5 @@
 # One package per line. Installed into the root filesystem by chroot-setup.sh.
+# A package followed by [amd64] or [arm64] is only for that kind of machine.
 
 # --- Layer 1: kernel and early boot ---
 linux-image-generic
@@ -46,8 +47,11 @@ e2fsprogs
 rsync
 grub-common
 grub2-common
-grub-pc-bin
-grub-efi-amd64-bin
+grub-pc-bin [amd64]
+grub-efi-amd64-bin [amd64]
+grub-efi-arm64-bin [arm64]
+xorriso
+mtools
 efibootmgr
 
 # --- Layer 4: desktop ---

@@ -14,11 +14,11 @@ rm -f /etc/apt/sources.list.d/*
 cat > /etc/apt/sources.list <<SRC
 deb $MIRROR $SUITE main universe restricted
 deb $MIRROR $SUITE-updates main universe restricted
-deb http://security.ubuntu.com/ubuntu $SUITE-security main universe restricted
+deb $SECURITY $SUITE-security main universe restricted
 SRC
 apt-get update
 apt-get install -y --no-install-recommends \
-    $(sed 's/#.*//' /tmp/build/packages.list)
+    $(sed 's/#.*//' /tmp/build/packages.list | awk -v a="[$ARCH]" '$2 == "" || $2 == a {print $1}')
 
 echo "== identity"
 # Keep Ubuntu's file out of the way so package upgrades don't undo the rename.

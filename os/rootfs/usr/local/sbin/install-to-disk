@@ -5,7 +5,7 @@
 #
 # The WHOLE disk is erased. It gets three partitions: a 1 MB BIOS boot
 # area, a 512 MB EFI system partition, and the rest as an ext4 root.
-# The result boots on both BIOS and UEFI machines.
+# The result boots on BIOS and UEFI PCs, or on UEFI ARM machines.
 #
 # For unattended use set HUD_USER, HUD_PASS, HUD_HOST and HUD_YES=1.
 set -euo pipefail
@@ -108,11 +108,17 @@ chroot "$T" useradd -m -s /bin/bash -G sudo,audio,video,plugdev,netdev "$USERNAM
 printf '%s:%s\n' "$USERNAME" "$PASSWORD" | chroot "$T" chpasswd
 
 say "INSTALLING BOOT LOADER"
-chroot "$T" grub-install --target=i386-pc "$DISK"
 # --removable puts the loader at the default EFI path, so the disk boots
 # without needing an entry in the firmware's boot list.
-chroot "$T" grub-install --target=x86_64-efi --efi-directory=/boot/efi \
-    --removable --no-nvram
+case $(dpkg --print-architecture) in
+    amd64)
+        chroot "$T" grub-install --target=i386-pc "$DISK"
+        chroot "$T" grub-install --target=x86_64-efi --efi-directory=/boot/efi \
+            --removable --no-nvram ;;
+    arm64)
+        chroot "$T" grub-install --target=arm64-efi --efi-directory=/boot/efi \
+            --removable --no-nvram ;;
+esac
 chroot "$T" update-grub
 
 sync
