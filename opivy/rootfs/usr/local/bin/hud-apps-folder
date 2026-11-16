@@ -1,42 +1,109 @@
 #!/usr/bin/env python3
 """hud-apps-folder - keep ~/Applications up to date, like the Mac's Applications folder.
 
-Every app that has a launcher file (.desktop) gets a link in ~/Applications.
-Open the folder in Files (the sidebar entry "Applications") and double-click
-an app to start it. Links are removed when an app is uninstalled.
+Every app gets a launcher in ~/Applications, shown in Files (sidebar:
+Applications) under its plain name with its icon. Double-click one to
+start it. Launchers of uninstalled apps are removed. Anything else you
+put in the folder is left alone.
 """
+import hashlib
+import json
 import os
+import subprocess
 import sys
 
 sys.path.insert(0, "/usr/share/hud/lib")
 import hudapps  # noqa: E402
 
 FOLDER = os.path.join(hudapps.HOME, "Applications")
+MARK = "X-OpIvy-Managed=true"
+
+
+def terminal():
+    try:
+        with open(os.path.join(hudapps.USER, "resolved.json")) as f:
+            return json.load(f).get("terminal", "foot")
+    except (OSError, ValueError):
+        return "foot"
+
+
+def launcher_text(source, name, in_terminal):
+    """The app's launcher file with its plain name, marked as ours.
+
+    An app that runs in a terminal is given the terminal to run in, since
+    Files has no terminal of its own to offer.
+    """
+    out, in_entry, named = [], False, False
+    term = terminal()
+    with open(source, errors="replace") as f:
+        for line in f:
+            line = line.rstrip("\n")
+            if line.startswith("["):
+                in_entry = line.strip() == "[Desktop Entry]"
+                out.append(line)
+                if in_entry:
+                    out.append(MARK)
+                continue
+            if in_entry and line.startswith("Name["):
+                continue                      # translations would hide the plain name
+            if in_entry and line.startswith("Name=") and not named:
+                line, named = "Name=" + name, True
+            if in_entry and in_terminal and line.startswith("Exec="):
+                line = f"Exec={term} -e {line[5:]}"
+            if in_entry and in_terminal and line.startswith("Terminal="):
+                line = "Terminal=false"
+            out.append(line)
+    return "\n".join(out) + "\n"
+
+
+def trust(path):
+    """Files starts a launcher without asking only if it is marked as checked."""
+    os.chmod(path, 0o755)
+    digest = hashlib.sha256(open(path, "rb").read()).hexdigest()
+    try:
+        subprocess.run(["gio", "set", "-t", "string", path, "metadata::xfce-exe-checksum", digest],
+                       capture_output=True, timeout=5)
+    except (OSError, subprocess.SubprocessError):
+        pass
 
 
 def main():
     os.makedirs(FOLDER, exist_ok=True)
-    wanted = {}
     apps = hudapps.desktop_entries()
+    wanted, names = {}, set()
     for app in apps:
         if app["hidden"] or not app["exec"] or hudapps.is_helper(app):
             continue
-        name = hudapps.app_name(app["id"], apps).replace("/", "-")
-        source = os.path.join(app["folder"], app["id"] + ".desktop")
-        wanted.setdefault(name, source)
-    for name, source in wanted.items():
-        link = os.path.join(FOLDER, name + ".desktop")
-        if os.path.islink(link) and os.readlink(link) == source:
+        name = hudapps.app_name(app["id"], apps)
+        if name in names:
             continue
-        if os.path.lexists(link):
-            os.remove(link)
-        os.symlink(source, link)
+        names.add(name)
+        wanted[app["id"] + ".desktop"] = (os.path.join(app["folder"], app["id"] + ".desktop"), name,
+                                         app["terminal"])
+    for fname, (source, name, in_terminal) in wanted.items():
+        path = os.path.join(FOLDER, fname)
+        try:
+            text = launcher_text(source, name, in_terminal)
+        except OSError:
+            continue
+        if os.path.islink(path):
+            os.remove(path)
+        if not os.path.exists(path) or open(path, errors="replace").read() != text:
+            with open(path, "w") as f:
+                f.write(text)
+        trust(path)
     for entry in os.listdir(FOLDER):
         path = os.path.join(FOLDER, entry)
-        if os.path.islink(path) and not os.path.exists(path):
+        if entry in wanted:
+            continue
+        if os.path.islink(path):              # links made by an earlier version
             os.remove(path)
-        elif entry.endswith(".desktop") and entry[:-8] not in wanted:
-            if os.path.islink(path):
+        elif entry.endswith(".desktop"):
+            try:
+                ours = MARK in open(path, errors="replace").read()
+            except OSError:
+                ours = False
+            if ours:
                 os.remove(path)
 
 

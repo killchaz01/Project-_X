@@ -407,7 +407,9 @@ def apply(reload=True):
     os.chmod(script, 0o755)
 
     if reload and in_session():
-        sh("labwc --reconfigure")
+        # Normally the session carries LABWC_PID; without it, signal the
+        # window manager directly (SIGHUP means "reload your settings").
+        sh("labwc --reconfigure" if os.environ.get("LABWC_PID") else f"pkill -HUP -x -u {os.getuid()} labwc")
         for command in restart:
             sh(command, wait=False)
 

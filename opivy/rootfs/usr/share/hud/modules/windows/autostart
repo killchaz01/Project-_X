@@ -7,5 +7,7 @@ if command -v gsettings >/dev/null; then
     gsettings set org.gnome.desktop.interface monospace-font-name '{{font_mono}} {{font_size}}'
 fi
 command -v xdg-user-dirs-update >/dev/null && xdg-user-dirs-update
+# Again now that the session is up, so Files trusts the app launchers.
+(sleep 5; hud-apps-folder) &
 command -v nm-applet >/dev/null && nm-applet --indicator &
 sh "{{hud_dir}}/autostart.sh"
