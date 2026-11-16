@@ -1,0 +1,44 @@
+OP IVY HELP
+
+THE MENU BAR (top)
+  OP IVY        system menu: About, System Settings, App Store, Force Quit,
+                Sleep, Restart, Shut Down, Lock Screen, Log Out
+  APP NAME      the app in front. Click for Hide, Quit, Zoom, Full Screen
+  FILE EDIT VIEW WINDOW HELP
+                menus for the app in front
+  NET BT VOL    network, Bluetooth, volume (scroll on VOL to change it)
+  SEARCH        find apps and files (or press Cmd+Space)
+  CLOCK         click for notifications and Do Not Disturb
+
+THE DOCK (bottom)
+  Click an app to open it or bring it to the front.
+  A mark under an app means it is running.
+  Drag an icon onto another to reorder. Right-click for more.
+  Drop files on the Trash to delete them, or on an app to open them.
+
+THE DESKTOP
+  Every panel of the console is live. Click one to use it.
+  Files in your Desktop folder appear at the top right.
+  Double-click to open, right-click for more.
+
+YOUR APPS
+  Grid icon in the dock, or Cmd+Shift+A     Application Center
+  Files > Applications                      every app, as a folder
+  Cmd+Space                                 search by name
+
+KEYS (Cmd is the Windows key on a PC keyboard)
+  Cmd+Space          search            Cmd+Q      quit the app
+  Cmd+W              close window      Cmd+H      hide the app
+  Cmd+M              minimise          Cmd+Tab    switch windows
+  Cmd+C / X / V / A  copy, cut, paste, select all
+  Cmd+,              Control Center    Cmd+Return terminal
+  Cmd+Shift+3 / 4 / 5   screenshots    Cmd+Option+Esc  Force Quit
+  Ctrl+Cmd+F         full screen       Ctrl+Cmd+Q lock
+  Ctrl+Space         next keyboard layout
+
+SETTINGS
+  Control Center (CONTROL in the bar, or Cmd+,): themes, dock, desktop,
+  keyboard layout, language and time zone.
+
+INSTALL TO A DISK
+  Open Terminal and run:   sudo install-to-disk

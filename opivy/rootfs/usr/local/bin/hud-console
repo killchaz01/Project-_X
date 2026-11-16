@@ -5,14 +5,18 @@ Draws the console (status board, station log, status frame, function
 list) on the desktop layer under all windows, with real data, redrawn
 every second. Click a panel to use it: the status rows open processes,
 files, network settings and the power menu; the frame runs the system
-scan; the function list and keys do what they say. Right-click opens
-the system menu.
+scan; the function list and keys do what they say.
 
-Runs when wallpaper_style is "console" and console_live is "yes";
-otherwise it exits and the still wallpaper is shown instead.
+Files in your Desktop folder show at the top right, on any wallpaper:
+double-click to open, right-click for Open, Show in Files, Move to Trash.
+Right-click the desktop for New Folder.
+
+The console is live when wallpaper_style is "console" and console_live
+is "yes"; otherwise the still wallpaper is shown under the desktop items.
 """
 import json
 import os
+import shlex
 import subprocess
 import sys
 
@@ -24,7 +28,10 @@ gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
 gi.require_version("GtkLayerShell", "0.1")
 gi.require_version("Rsvg", "2.0")
-from gi.repository import Gdk, GLib, Gtk, GtkLayerShell, Rsvg  # noqa: E402
+gi.require_version("GdkPixbuf", "2.0")
+gi.require_version("Pango", "1.0")
+gi.require_version("PangoCairo", "1.0")
+from gi.repository import Gdk, GdkPixbuf, Gio, GLib, Gtk, GtkLayerShell, Pango, PangoCairo, Rsvg  # noqa: E402
 
 USER = os.path.join(os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")), "hud")
 
@@ -37,12 +44,25 @@ def settings():
         return {}
 
 
+DESK_W, DESK_H, DESK_ICON = 108, 96, 48      # one desktop item: cell size and icon size
+
+
+def desktop_dir():
+    try:
+        out = subprocess.run(["xdg-user-dir", "DESKTOP"], capture_output=True, text=True, timeout=2).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        out = ""
+    return out if out and out != os.path.expanduser("~") else os.path.expanduser("~/Desktop")
+
+
 class Console(Gtk.Window):
-    def __init__(self, v):
+    def __init__(self, v, live):
         super().__init__()
-        self.v = v
+        self.v, self.live = v, live
         self.probe = console_layout.Probe()
-        self.handle, self.spots, self.hover = None, [], None
+        self.handle, self.picture, self.spots, self.hover = None, None, [], None
+        self.desk = desktop_dir()
+        self.desk_names, self.desk_icons, self.selected = [], {}, None
         GtkLayerShell.init_for_window(self)
         GtkLayerShell.set_layer(self, GtkLayerShell.Layer.BOTTOM)
         GtkLayerShell.set_namespace(self, "hud-console")
@@ -54,15 +74,20 @@ class Console(Gtk.Window):
 
         self.area = Gtk.DrawingArea()
         self.area.add_events(Gdk.EventMask.POINTER_MOTION_MASK | Gdk.EventMask.BUTTON_PRESS_MASK |
-                        Gdk.EventMask.BUTTON_RELEASE_MASK |
-                             Gdk.EventMask.LEAVE_NOTIFY_MASK)
+                             Gdk.EventMask.BUTTON_RELEASE_MASK | Gdk.EventMask.LEAVE_NOTIFY_MASK)
         self.area.connect("draw", self.draw)
         self.area.connect("motion-notify-event", self.motion)
         self.area.connect("leave-notify-event", lambda *_: self.set_hover(None))
+        self.area.connect("button-press-event", self.press)
         self.area.connect("button-release-event", self.click)
         self.area.set_has_tooltip(True)
         self.area.connect("query-tooltip", self.tooltip)
         self.add(self.area)
+        if not live:        # the still wallpaper, with desktop items on top
+            try:
+                self.picture = GdkPixbuf.Pixbuf.new_from_file(v.get("wallpaper_path", ""))
+            except GLib.Error:
+                self.picture = None
         self.refresh()
         GLib.timeout_add_seconds(1, self.refresh)
         self.show_all()
@@ -74,36 +99,118 @@ class Console(Gtk.Window):
         return s, (w - console_layout.W * s) / 2, (h - console_layout.H * s) / 2
 
     def refresh(self):
-        data = self.probe.collect(self.v)
-        svg, self.spots = console_layout.build(self.v, data, glow=self.v.get("console_glow") == "yes")
-        try:
-            self.handle = Rsvg.Handle.new_from_data(svg.encode())
-        except GLib.Error as e:
-            print("hud-console:", e, file=sys.stderr)
-        self.area.queue_draw()
+        changed = self.scan_desktop()
+        if self.live:
+            data = self.probe.collect(self.v)
+            svg, self.spots = console_layout.build(self.v, data, glow=self.v.get("console_glow") == "yes")
+            try:
+                self.handle = Rsvg.Handle.new_from_data(svg.encode())
+            except GLib.Error as e:
+                print("hud-console:", e, file=sys.stderr)
+            changed = True
+        if changed:
+            self.area.queue_draw()
         return True
 
+    # ------------------------------------------------- desktop items
+    def scan_desktop(self):
+        try:
+            names = sorted((n for n in os.listdir(self.desk) if not n.startswith(".")), key=str.lower)
+        except OSError:
+            names = []
+        if names == self.desk_names:
+            return False
+        self.desk_names = names
+        theme = Gtk.IconTheme.get_default()
+        self.desk_icons = {}
+        for n in names:
+            try:
+                info = Gio.File.new_for_path(os.path.join(self.desk, n)).query_info(
+                    "standard::icon", Gio.FileQueryInfoFlags.NONE, None)
+                found = theme.lookup_by_gicon(info.get_icon(), DESK_ICON, Gtk.IconLookupFlags.FORCE_SIZE)
+                self.desk_icons[n] = found.load_icon() if found else None
+            except GLib.Error:
+                self.desk_icons[n] = None
+        if self.selected not in names:
+            self.selected = None
+        return True
+
+    def desk_cells(self):
+        """Where each desktop item sits: columns from the top right, like a Mac."""
+        w, h = self.area.get_allocated_width(), self.area.get_allocated_height()
+        top, bottom = 52, h - 100
+        x, y, cells = w - 24 - DESK_W, top, []
+        for n in self.desk_names:
+            cells.append((x, y, n))
+            y += DESK_H
+            if y + DESK_H > bottom:
+                y, x = top, x - DESK_W
+        return cells
+
+    def desk_at(self, ex, ey):
+        for x, y, n in self.desk_cells():
+            if x <= ex <= x + DESK_W and y <= ey <= y + DESK_H:
+                return n
+        return None
+
+    def draw_desktop(self, cr):
+        def colour(key, fallback):
+            c = Gdk.RGBA()
+            c.parse(self.v.get(key, fallback))
+            return c.red, c.green, c.blue
+        line, panel, bg = colour("line", "#e9f6fa"), colour("panel", "#070b0e"), colour("bg", "#030506")
+        for x, y, n in self.desk_cells():
+            lit = n == self.selected
+            cr.rectangle(x + 4, y + 2, DESK_W - 8, DESK_H - 6)
+            cr.set_source_rgba(*(line if lit else panel), 0.95 if lit else 0.86)
+            cr.fill_preserve()
+            cr.set_source_rgba(*line, 1 if lit or n == self.hover else 0.35)
+            cr.set_line_width(1.5)
+            cr.stroke()
+            icon = self.desk_icons.get(n)
+            if icon:
+                Gdk.cairo_set_source_pixbuf(cr, icon, x + (DESK_W - icon.get_width()) / 2, y + 8)
+                cr.paint()
+            layout = PangoCairo.create_layout(cr)
+            layout.set_font_description(Pango.FontDescription(f"{self.v.get('font_ui', 'Sans')} 7"))
+            layout.set_width(int((DESK_W - 14) * Pango.SCALE))
+            layout.set_alignment(Pango.Alignment.CENTER)
+            layout.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
+            layout.set_text(n, -1)
+            cr.set_source_rgba(*(bg if lit else line), 1)
+            cr.move_to(x + 7, y + 12 + DESK_ICON)
+            PangoCairo.show_layout(cr, layout)
+
+    # -------------------------------------------------------- drawing
     def draw(self, _w, cr):
-        if not self.handle:
-            return
         s, ox, oy = self.geometry()
         cr.save()
         cr.translate(ox, oy)
         cr.scale(s, s)
-        rect = Rsvg.Rectangle()
-        rect.x, rect.y, rect.width, rect.height = 0, 0, console_layout.W, console_layout.H
-        self.handle.render_document(cr, rect)
-        if self.hover is not None and self.hover < len(self.spots):
-            x, y, w, h, _cmd, _tip = self.spots[self.hover]
-            col = Gdk.RGBA()
-            col.parse(self.v.get("cyan", "#9fe6f5"))
-            cr.set_source_rgba(col.red, col.green, col.blue, 0.9)
-            cr.set_line_width(3)
-            cr.rectangle(x - 6, y - 6, w + 12, h + 12)
-            cr.stroke()
+        if self.live and self.handle:
+            rect = Rsvg.Rectangle()
+            rect.x, rect.y, rect.width, rect.height = 0, 0, console_layout.W, console_layout.H
+            self.handle.render_document(cr, rect)
+            if isinstance(self.hover, int) and self.hover < len(self.spots):
+                x, y, w, h, _cmd, _tip = self.spots[self.hover]
+                col = Gdk.RGBA()
+                col.parse(self.v.get("cyan", "#9fe6f5"))
+                cr.set_source_rgba(col.red, col.green, col.blue, 0.9)
+                cr.set_line_width(3)
+                cr.rectangle(x - 6, y - 6, w + 12, h + 12)
+                cr.stroke()
+        elif self.picture:
+            cr.scale(console_layout.W / self.picture.get_width(), console_layout.H / self.picture.get_height())
+            Gdk.cairo_set_source_pixbuf(cr, self.picture, 0, 0)
+            cr.paint()
         cr.restore()
+        self.draw_desktop(cr)
 
+    # What is under the pointer: a desktop item's name, a spot's number, or None.
     def spot_at(self, ex, ey):
+        name = self.desk_at(ex, ey)
+        if name is not None:
+            return name
         s, ox, oy = self.geometry()
         x, y = (ex - ox) / s, (ey - oy) / s
         found = None
@@ -128,18 +235,51 @@ class Console(Gtk.Window):
         i = self.spot_at(x, y)
         if i is None:
             return False
-        tip.set_text(self.spots[i][5])
+        tip.set_text(i if isinstance(i, str) else self.spots[i][5])
         return True
 
+    def press(self, _w, event):
+        """Desktop items: one click selects, a double click opens."""
+        name = self.desk_at(event.x, event.y)
+        if event.button == 1:
+            if name and event.type == Gdk.EventType.DOUBLE_BUTTON_PRESS:
+                run("xdg-open " + shlex.quote(os.path.join(self.desk, name)))
+            if name != self.selected:
+                self.selected = name
+                self.area.queue_draw()
+
     def click(self, _w, event):
-        if event.button == 3:
-            run("hud-menu")
-            return
-        if event.button != 1:
-            return
         i = self.spot_at(event.x, event.y)
-        if i is not None:
+        if event.button == 3:
+            self.context_menu(i if isinstance(i, str) else None, event)
+        elif event.button == 1 and isinstance(i, int):
             run(self.spots[i][4])
+
+    def context_menu(self, name, event):
+        menu = Gtk.Menu()
+
+        def entry(label, command):
+            m = Gtk.MenuItem(label=label)
+            m.connect("activate", lambda *_: run(command))
+            menu.append(m)
+
+        if name:
+            path = shlex.quote(os.path.join(self.desk, name))
+            entry("Open", "xdg-open " + path)
+            entry("Show in Files", "thunar " + shlex.quote(self.desk))
+            menu.append(Gtk.SeparatorMenuItem())
+            entry("Move to Trash", "gio trash " + path)
+        else:
+            desk = shlex.quote(self.desk)
+            entry("New Folder", f'd={desk}/"untitled folder"; n=2; while [ -e "$d" ]; do '
+                                f'd={desk}/"untitled folder $n"; n=$((n + 1)); done; mkdir -p "$d"')
+            entry("Open Desktop Folder", "thunar " + desk)
+            menu.append(Gtk.SeparatorMenuItem())
+            entry("Change Theme", "hud-menu theme")
+            entry("System Menu…", "hud-menu")
+        menu.show_all()
+        menu.attach_to_widget(self.area, None)
+        menu.popup_at_pointer(event)
 
 
 def run(command):
@@ -154,11 +294,10 @@ def main():
     v = settings()
     if not v:
         sys.exit("hud-console: no settings yet (run: hudctl apply)")
-    if v.get("wallpaper_style", "console") != "console" or v.get("console_live", "yes") != "yes":
-        return
+    live = v.get("wallpaper_style", "console") == "console" and v.get("console_live", "yes") == "yes"
     if not GtkLayerShell.is_supported():
         sys.exit("hud-console: this desktop does not support layer-shell")
-    Console(v).connect("destroy", Gtk.main_quit)
+    Console(v, live).connect("destroy", Gtk.main_quit)
     Gtk.main()
 
 

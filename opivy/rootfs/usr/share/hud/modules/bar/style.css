@@ -22,6 +22,14 @@ tooltip label { color: {{title}}; font-family: "{{font_mono}}", monospace; font-
 #backlight, #wireplumber, #battery, #custom-alerts, #custom-theme, #custom-display, #custom-prefs,
 #custom-power, #custom-search { margin: 3px 2px; }
 #custom-title:hover { color: {{bg}}; background: {{line}}; }
+/* File, Edit, View, Window, Help: plain words, lit under the pointer. */
+#custom-m-file, #custom-m-edit, #custom-m-view, #custom-m-window, #custom-m-help {
+  margin: 3px 0; padding: 0 7px; color: {{text}};
+}
+#custom-m-file:hover, #custom-m-edit:hover, #custom-m-view:hover, #custom-m-window:hover,
+#custom-m-help:hover { color: {{bg}}; background: {{line}}; }
+#custom-kbd { margin: 3px 2px; padding: 0 6px; color: {{line}}; }
+#custom-kbd:hover { color: {{bg}}; background: {{line}}; }
 #hardware, #prefs { margin: 0 6px; }
 #tray { margin: 0 8px; }
 

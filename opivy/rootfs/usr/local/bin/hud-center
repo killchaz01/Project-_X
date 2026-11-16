@@ -430,6 +430,7 @@ class Center(Gtk.Window):
         launcher(f, "UPDATE SYSTEM", f"{term} -e sh -c 'sudo apt-get update && sudo apt-get full-upgrade; "
                                      "echo; echo Finished. Press Enter.; read _'")
         launcher(f, "ABOUT", f"{term} -H hud")
+        launcher(f, "HARDWARE CHECK", f"{term} -H hud-hwcheck")
 
         f = section("THEME")
         themes = subprocess.run(["hudctl", "theme"], capture_output=True, text=True).stdout.split("\n")
@@ -474,6 +475,12 @@ class Center(Gtk.Window):
                           ("title", "Titles"), ("cyan", "Read-outs"), ("warn", "Highlights"),
                           ("alert", "Alerts"), ("muted", "Dim text")):
             colour(f, text, key)
+
+        f = section("KEYBOARD AND LANGUAGE")
+        choice(f, "Keyboard layout", "keyboard_layout",
+               ["us", "gb", "de", "fr", "es", "it", "pt", "br", "latam", "nl", "be", "ch", "se", "no", "dk",
+                "fi", "pl", "cz", "hu", "tr", "ru", "ua", "gr", "il", "ara", "jp", "kr", "ca", "ie"])
+        launcher(f, "LANGUAGE AND TIME ZONE", f"{term} -e hud-language")
 
         f = section("MODULES")
         out = subprocess.run(["hudctl", "module"], capture_output=True, text=True).stdout

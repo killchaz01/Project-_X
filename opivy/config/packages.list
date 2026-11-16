@@ -35,6 +35,14 @@ usbutils
 
 # --- Layer 2: networking ---
 network-manager
+# real hardware: Wi-Fi tools and rules, laptop sound firmware, processor fixes, battery
+iw
+wireless-regdb
+firmware-sof-signed
+intel-microcode
+amd64-microcode
+upower
+tzdata
 iproute2
 iputils-ping
 wpasupplicant
@@ -103,6 +111,10 @@ thunar
 gvfs
 mousepad
 epiphany-browser
+# viewers, so double-clicking a picture, PDF or film opens something
+ristretto
+evince
+mpv
 # Application Center and Control Center
 python3-gi
 python3-gi-cairo

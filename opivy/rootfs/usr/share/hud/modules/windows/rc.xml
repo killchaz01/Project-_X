@@ -21,7 +21,8 @@
   <keyboard>
     <default/>
     <!-- The Super key is Command on a Mac keyboard. -->
-    <keybind key="W-space"><action name="Execute" command="fuzzel"/></keybind>
+    <keybind key="W-space"><action name="Execute" command="hud-search"/></keybind>
+    <keybind key="C-space"><action name="Execute" command="hud-menu kbd-next"/></keybind>
     <keybind key="W-Return"><action name="Execute" command="{{terminal}}"/></keybind>
     <!-- Cmd+Shift+A: Applications, as in the Mac's Finder. Cmd+A is left to
          apps for Select All. -->

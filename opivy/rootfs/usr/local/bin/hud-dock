@@ -8,8 +8,10 @@
   - Click an app that is not running to open it; click one that is
     running to bring it to the front (click again to cycle its windows).
   - Rest the pointer on an icon to see its name above it.
-  - Right-click: New Window, Show All Windows, Quit, Keep in Dock /
-    Remove from Dock.
+  - Drag a pinned icon onto another to reorder them.
+  - Drop files on the Trash to delete them, or on an app to open them.
+  - Right-click: New Window, Show, Hide, Quit, Keep in Dock / Remove
+    from Dock.
 
 Runs when dock_style is "mac" and the dock is at the bottom.
 """
@@ -99,6 +101,7 @@ class Dock(Gtk.Window):
         self.apps = hudapps.desktop_entries()
         self.pinned = self.read_pins()
         self.items, self.boxes, self.hover = [], [], None
+        self.pressed = self.drag_x = None
         self.cycle = {}
         self.trash = Item("Trash", "thunar trash:///", "user-trash", [], False)
         self.trash.load_icon(v)
@@ -120,10 +123,17 @@ class Dock(Gtk.Window):
                         Gdk.EventMask.BUTTON_RELEASE_MASK |
                              Gdk.EventMask.LEAVE_NOTIFY_MASK)
         self.area.connect("draw", self.draw)
-        self.area.connect("motion-notify-event", lambda _w, e: self.set_hover(self.item_at(e.x, e.y)))
+        self.area.connect("motion-notify-event", self.motion)
+        self.area.connect("button-press-event", self.press)
         self.area.connect("leave-notify-event", lambda *_: self.set_hover(None))
         self.area.connect("button-release-event", self.click)
         self.area.connect("size-allocate", lambda *_: self.update_input())
+        # Files dragged from the file manager: onto the Trash, or onto an app.
+        self.area.drag_dest_set(Gtk.DestDefaults.ALL, [Gtk.TargetEntry.new("text/uri-list", 0, 0)],
+                                Gdk.DragAction.COPY | Gdk.DragAction.MOVE)
+        self.area.connect("drag-motion", lambda _w, _c, x, y, _t: self.set_hover(self.item_at(x, y)))
+        self.area.connect("drag-leave", lambda *_: self.set_hover(None))
+        self.area.connect("drag-data-received", self.dropped)
         self.add(self.area)
         self.refresh()
         GLib.timeout_add(1000, self.refresh)
@@ -280,8 +290,13 @@ class Dock(Gtk.Window):
                 cr.rectangle(x + TILE / 2 - 4, y + TILE + 5, 8, 4)
                 cr.set_source_rgba(*(cyan if it.focused else line), 1)
                 cr.fill()
-            if lit:
+            if lit and self.drag_x is None:
                 self.name_tag(cr, it.title.upper(), x + TILE / 2, oy - 6, line, bg)
+        if self.drag_x is not None and self.pressed is not None:
+            pix = self.boxes[self.pressed][1].pixbuf       # the icon being moved
+            if pix:
+                Gdk.cairo_set_source_pixbuf(cr, pix, self.drag_x - pix.get_width() / 2, oy - 8)
+                cr.paint_with_alpha(0.85)
 
     def name_tag(self, cr, text, cx, bottom, line, bg):
         layout = PangoCairo.create_layout(cr)
@@ -298,8 +313,41 @@ class Dock(Gtk.Window):
         PangoCairo.show_layout(cr, layout)
 
     # ------------------------------------------------------------ clicks
+    def press(self, _w, event):
+        self.pressed = self.item_at(event.x, event.y) if event.button == 1 else None
+        self.drag_x = None
+
+    def motion(self, _w, event):
+        self.set_hover(self.item_at(event.x, event.y))
+        # Holding a pinned icon and moving: it follows the pointer.
+        if self.pressed is not None and event.state & Gdk.ModifierType.BUTTON1_MASK \
+                and self.boxes[self.pressed][1].pinned:
+            self.drag_x = event.x
+            self.area.queue_draw()
+
+    def dropped(self, _w, context, x, y, data, _info, when):
+        i = self.item_at(x, y)
+        paths = [GLib.filename_from_uri(u)[0] for u in data.get_uris() if u.startswith("file://")]
+        if i is not None and paths:
+            it = self.boxes[i][1]
+            quoted = " ".join(shlex.quote(p) for p in paths)
+            run(("gio trash " if it is self.trash else it.command + " ") + quoted)
+        Gtk.drag_finish(context, i is not None and bool(paths), False, when)
+
     def click(self, _w, event):
         i = self.item_at(event.x, event.y)
+        pressed, dragged = self.pressed, self.drag_x is not None
+        self.pressed = self.drag_x = None
+        self.area.queue_draw()
+        if dragged and pressed is not None:
+            # Dropped on another pinned icon: take its place.
+            if i is not None and i != pressed and self.boxes[i][1].pinned:
+                pins = list(self.pinned)
+                moving = self.boxes[pressed][1]
+                pins.remove(moving)
+                pins.insert(self.pinned.index(self.boxes[i][1]), moving)
+                self.set_pins(pins)
+            return
         if i is None:
             return
         it = self.boxes[i][1]

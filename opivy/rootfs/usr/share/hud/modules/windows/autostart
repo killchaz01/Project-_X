@@ -6,5 +6,6 @@ if command -v gsettings >/dev/null; then
     gsettings set org.gnome.desktop.interface font-name '{{font_ui}} {{font_size}}'
     gsettings set org.gnome.desktop.interface monospace-font-name '{{font_mono}} {{font_size}}'
 fi
+command -v xdg-user-dirs-update >/dev/null && xdg-user-dirs-update
 command -v nm-applet >/dev/null && nm-applet --indicator &
 sh "{{hud_dir}}/autostart.sh"

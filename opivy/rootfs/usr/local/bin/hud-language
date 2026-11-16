@@ -1,0 +1,33 @@
+#!/bin/bash
+# hud-language - choose the system language and the time zone.
+# Asks for your password, because both are system-wide settings.
+set -u
+names=("English (US)" "English (UK)" "Español" "Français" "Deutsch" "Italiano" "Português (Brasil)"
+       "Português" "Nederlands" "Svenska" "Norsk" "Dansk" "Suomi" "Polski" "Türkçe" "Русский"
+       "Українська" "日本語" "한국어" "简体中文")
+codes=(en_US en_GB es_ES fr_FR de_DE it_IT pt_BR pt_PT nl_NL sv_SE nb_NO da_DK fi_FI pl_PL tr_TR ru_RU
+       uk_UA ja_JP ko_KR zh_CN)
+
+echo; echo "  LANGUAGE   (now: ${LANG:-not set})"; echo
+for i in "${!names[@]}"; do printf '   %2d  %s\n' $((i + 1)) "${names[$i]}"; done
+echo; read -rp "  Number of the language, or Enter to keep it: " n
+if [[ $n =~ ^[0-9]+$ ]] && [ "$n" -ge 1 ] && [ "$n" -le ${#codes[@]} ]; then
+    loc="${codes[$((n - 1))]}.UTF-8"; lang=${codes[$((n - 1))]%%_*}
+    echo "  Setting up ${names[$((n - 1))]} ..."
+    sudo locale-gen "$loc" && sudo update-locale LANG="$loc" || { echo "  Could not set the language."; }
+    # Translations for apps, where Ubuntu has a pack for the language.
+    [ "$lang" = en ] || sudo apt-get install -y "language-pack-$lang" 2>/dev/null |
+        tail -1 || echo "  (No translation pack could be downloaded; menus may stay in English.)"
+    echo "  Done. Log out and in again to see it."
+fi
+
+echo; echo "  TIME ZONE   (now: $(timedatectl show -p Timezone --value 2>/dev/null))"
+echo "  Type a zone such as Europe/London, America/New_York or Asia/Tokyo,"
+read -rp "  part of a city name to search, or Enter to keep it: " tz
+while [ -n "$tz" ] && [ ! -f "/usr/share/zoneinfo/$tz" ]; do
+    echo "  Zones matching \"$tz\":"
+    timedatectl list-timezones 2>/dev/null | grep -i -- "${tz// /_}" | head -15 | sed 's/^/    /'
+    read -rp "  Type one of them in full, or Enter to keep the current zone: " tz
+done
+if [ -n "$tz" ]; then sudo timedatectl set-timezone "$tz" && echo "  Time zone is now $tz."; fi
+echo; read -rp "  Press Enter to close. " _

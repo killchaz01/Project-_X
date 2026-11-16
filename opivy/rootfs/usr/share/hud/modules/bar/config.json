@@ -13,8 +13,16 @@
   "custom/menu": { "format": "{{mark_a}} {{logo_text}}", "on-click": "hud-menu", "tooltip": false },
   "custom/title": { "exec": "hud-menu app-name | tr a-z A-Z", "interval": 1, "format": "{}",
                     "on-click": "hud-menu app", "tooltip": false },
-  "custom/search": { "format": "SEARCH", "on-click": "fuzzel", "tooltip": false },
-  "clock": { "format": "{:{{clock_format}}}", "tooltip-format": "<tt>{calendar}</tt>" },
+  "custom/search": { "format": "SEARCH", "on-click": "hud-search", "tooltip": false },
+  "custom/m-file": { "format": "FILE", "on-click": "hud-appmenu file", "tooltip": false },
+  "custom/m-edit": { "format": "EDIT", "on-click": "hud-appmenu edit", "tooltip": false },
+  "custom/m-view": { "format": "VIEW", "on-click": "hud-appmenu view", "tooltip": false },
+  "custom/m-window": { "format": "WINDOW", "on-click": "hud-appmenu window", "tooltip": false },
+  "custom/m-help": { "format": "HELP", "on-click": "hud-appmenu help", "tooltip": false },
+  "custom/kbd": { "exec": "hud-menu kbd", "interval": "once", "on-click": "hud-menu kbd-pick",
+                  "tooltip": false },
+  "clock": { "format": "{:{{clock_format}}}", "tooltip-format": "<tt>{calendar}</tt>",
+             "on-click": "hud-notify" },
   "tray": { "spacing": 8, "icon-size": 16 },
 
   "cpu": { "format": "CPU {usage}%", "interval": 3, "on-click": "{{terminal}} -e htop" },
@@ -28,11 +36,11 @@
   },
 
   "network": {
-    "format-wifi": "NET {essid} {signalStrength}%",
+    "format-wifi": "NET {signalStrength}%",
     "format-ethernet": "NET LINK",
     "format-linked": "NET NO ADDRESS",
     "format-disconnected": "NET OFFLINE",
-    "tooltip-format": "{ifname} {ipaddr}\nClick: network settings",
+    "tooltip-format": "{essid} {ifname} {ipaddr}\nClick: network settings",
     "on-click": "{{terminal}} -e nmtui"
   },
   "bluetooth": {
@@ -43,17 +51,17 @@
     "on-click": "hud-menu bluetooth", "on-click-right": "blueman-manager"
   },
   "backlight": {
-    "format": "LIGHT {percent}%", "tooltip-format": "Scroll to change brightness",
+    "format": "LT {percent}", "tooltip-format": "Scroll to change brightness",
     "on-scroll-up": "brightnessctl -q set 5%+", "on-scroll-down": "brightnessctl -q set 5%-"
   },
   "wireplumber": {
-    "format": "VOL {volume}%", "format-muted": "VOL MUTE",
+    "format": "VOL {volume}", "format-muted": "VOL MUTE",
     "on-click": "pavucontrol", "on-click-right": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle",
     "scroll-step": 5
   },
   "battery": {
-    "format": "PWR {capacity}%", "format-charging": "PWR {capacity}% CHG",
-    "format-plugged": "PWR {capacity}% AC",
+    "format": "PWR {capacity}", "format-charging": "PWR {capacity}+",
+    "format-plugged": "PWR {capacity} AC",
     "states": { "warning": 25, "critical": 10 }
   },
   "custom/alerts": {

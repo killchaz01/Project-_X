@@ -1,0 +1,63 @@
+#!/bin/bash
+# hud-hwcheck - check that this computer's hardware is working.
+# Run it on the real machine (Help > Hardware Check). It changes nothing.
+G=$'\e[1;32m'; B=$'\e[1;31m'; Y=$'\e[0;33m'; N=$'\e[0m'
+[ -t 1 ] || { G=; B=; Y=; N=; }
+ok()   { printf '  %-12s %sOK%s       %s\n' "$1" "$G" "$N" "$2"; }
+bad()  { printf '  %-12s %sPROBLEM%s  %s\n' "$1" "$B" "$N" "$2"; BAD=$((BAD + 1)); }
+none() { printf '  %-12s %sNONE%s     %s\n' "$1" "$Y" "$N" "$2"; }
+BAD=0
+
+echo; echo "  HARDWARE CHECK - $(cat /sys/class/dmi/id/product_name 2>/dev/null || echo this computer)"; echo
+
+gpu=$(lspci -k 2>/dev/null | awk '/VGA|3D|Display/ {found=1; sub(/^[^:]*: /, ""); name=$0} found && /Kernel driver in use/ {print $NF " - " name; exit}')
+if [ -n "$gpu" ]; then ok GRAPHICS "$gpu"; else bad GRAPHICS "no driver loaded for the graphics chip"; fi
+
+wifi=$(iw dev 2>/dev/null | awk '/Interface/ {print $2; exit}')
+if [ -n "$wifi" ]; then
+    nets=$(nmcli -t -f SSID device wifi list ifname "$wifi" 2>/dev/null | grep -c .)
+    if rfkill list wifi 2>/dev/null | grep -q "Hard blocked: yes"; then bad WI-FI "$wifi is switched off by a hardware switch"
+    elif [ "${nets:-0}" -gt 0 ]; then ok WI-FI "$wifi sees $nets network(s)"
+    else ok WI-FI "$wifi found (no networks in range, or Wi-Fi is off)"; fi
+elif lspci -nn 2>/dev/null | grep -qi "network controller\|wireless"; then
+    bad WI-FI "adapter present but no driver: $(lspci 2>/dev/null | grep -i 'network controller\|wireless' | sed 's/^[^:]*: //' | head -1)"
+else none WI-FI "no Wi-Fi adapter"; fi
+
+eth=$(ls /sys/class/net 2>/dev/null | grep -E '^(en|eth)' | head -1)
+if [ -n "$eth" ]; then ok ETHERNET "$eth, cable $(cat /sys/class/net/$eth/carrier 2>/dev/null | sed 's/1/connected/; s/0/not connected/')"; else none ETHERNET "no wired port"; fi
+
+if [ -n "$(ls /sys/class/bluetooth 2>/dev/null)" ]; then
+    if systemctl is-active -q bluetooth; then ok BLUETOOTH "$(ls /sys/class/bluetooth | head -1) ready"; else bad BLUETOOTH "adapter found but the service is not running"; fi
+else none BLUETOOTH "no Bluetooth adapter"; fi
+
+sinks=$(wpctl status 2>/dev/null | sed -n '/Sinks:/,/Sources:/p' | grep -c '[0-9]\+\. ')
+if [ "${sinks:-0}" -gt 0 ] && ! wpctl status 2>/dev/null | sed -n '/Sinks:/,/Sources:/p' | grep -qi "dummy"; then ok SOUND "$sinks output(s)"
+elif [ -n "$(ls /proc/asound 2>/dev/null | grep card)" ]; then bad SOUND "sound card found but no output is set up"
+else bad SOUND "no sound card found"; fi
+mics=$(wpctl status 2>/dev/null | sed -n '/Sources:/,/Filters:/p' | grep -c '[0-9]\+\. ')
+if [ "${mics:-0}" -gt 0 ]; then ok MICROPHONE "$mics input(s)"; else none MICROPHONE "no input found"; fi
+
+bat=$(ls -d /sys/class/power_supply/BAT* 2>/dev/null | head -1)
+if [ -n "$bat" ]; then ok BATTERY "$(cat "$bat/capacity")% $(cat "$bat/status")"; else none BATTERY "no battery (desktop computer?)"; fi
+
+bl=$(ls /sys/class/backlight 2>/dev/null | head -1)
+if [ -n "$bl" ]; then ok BRIGHTNESS "$bl at $(( $(cat /sys/class/backlight/$bl/brightness) * 100 / $(cat /sys/class/backlight/$bl/max_brightness) ))%"
+elif [ -n "$bat" ]; then bad BRIGHTNESS "laptop screen brightness cannot be controlled"
+else none BRIGHTNESS "no built-in screen"; fi
+
+if grep -q mem /sys/power/state 2>/dev/null; then ok SLEEP "supported ($(cat /sys/power/mem_sleep 2>/dev/null))"; else bad SLEEP "this machine does not offer sleep"; fi
+
+if grep -qi touchpad /proc/bus/input/devices; then ok TRACKPAD "$(grep -i 'Name=.*touchpad' /proc/bus/input/devices | head -1 | sed 's/.*Name="//; s/"//')"
+elif [ -n "$bat" ]; then bad TRACKPAD "no trackpad found"; else none TRACKPAD "none"; fi
+
+if ls /dev/video* >/dev/null 2>&1; then ok CAMERA "$(cat /sys/class/video4linux/video0/name 2>/dev/null)"; else none CAMERA "no camera found"; fi
+
+fw=$(journalctl -k -b --no-pager 2>/dev/null | grep -i "firmware" | grep -i "fail\|error\|not found" | grep -vi "regulatory" | head -3)
+if [ -n "$fw" ]; then bad FIRMWARE "a device asked for firmware that is missing:"; echo "$fw" | sed 's/^/                 /'; else ok FIRMWARE "no missing firmware reported"; fi
+
+failed=$(systemctl --failed --no-legend 2>/dev/null | grep -c .)
+if [ "${failed:-0}" -eq 0 ]; then ok SERVICES "all running"; else bad SERVICES "$failed failed: systemctl --failed"; fi
+
+echo
+if [ "$BAD" -eq 0 ]; then echo "  ${G}Everything found is working.${N}"; else echo "  ${B}$BAD problem(s).${N} Send this report when asking for help."; fi
+echo

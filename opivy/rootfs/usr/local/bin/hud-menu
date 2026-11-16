@@ -16,6 +16,7 @@
 #   hud-menu alerts-toggle    switch notifications on or off
 #   hud-menu bluetooth        switch Bluetooth on or off
 #   hud-menu power            sleep, restart, shut down, lock, log out
+#   hud-menu kbd-pick         choose a keyboard layout (kbd-next: the next one)
 #   hud-menu title            print the front window's title
 set -u
 CONF="${XDG_CONFIG_HOME:-$HOME/.config}/hud"
@@ -101,7 +102,7 @@ app)
             "Open Home") thunar "$HOME" & ;;
             *Documents) thunar "$(xdg-user-dir DOCUMENTS)" & ;;
             *Downloads) thunar "$(xdg-user-dir DOWNLOAD)" & ;;
-            Search*)   fuzzel & ;;
+            Search*)   hud-search & ;;
         esac
         exit 0
     fi
@@ -145,6 +146,20 @@ bluetooth)
     else
         bluetoothctl power off > /dev/null 2>&1; rfkill block bluetooth
     fi
+    ;;
+kbd)
+    # For the bar: the layout in use, shown only when there is a choice.
+    case "$(hudctl get keyboard_layouts)" in *,*) hudctl get keyboard_layout | tr a-z A-Z ;; esac
+    ;;
+kbd-pick)
+    choice=$(hudctl get keyboard_layouts | tr ',' '\n' | sed 's/ //g' | pick "KEYBOARD" 8 24) || exit 0
+    [ -n "$choice" ] && hudctl set keyboard_layout "$choice"
+    ;;
+kbd-next)
+    now=$(hudctl get keyboard_layout)
+    next=$(hudctl get keyboard_layouts | tr ',' '\n' | sed 's/ //g' | awk -v now="$now" \
+        '{a[NR]=$0} $0==now {i=NR} END {if (NR > 1) print a[i % NR + 1]}')
+    [ -n "$next" ] && hudctl set keyboard_layout "$next"
     ;;
 power)
     choice=$(printf '%s\n' "Sleep" "Restart…" "Shut Down…" "Lock Screen" "Log Out $(id -un)…" |

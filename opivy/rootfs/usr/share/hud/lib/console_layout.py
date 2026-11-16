@@ -392,7 +392,7 @@ def build(v, d, glow=True):
     groups = ((("NETWORK", f"{term} -e nmtui"), ("BLUETOOTH", "blueman-manager"), ("SOUND", "pavucontrol"),
                ("DISPLAYS", "wdisplays"), ("UPDATE SYS", update)),
               (("POWER MENU", "hud-menu power"), ("LOCK", "swaylock -f")),
-              (("SEARCH", "fuzzel"), ("FILES", "thunar"), ("TERMINAL", term), ("APP CENTER", "hud-center apps")),
+              (("SEARCH", "hud-search"), ("FILES", "thunar"), ("TERMINAL", term), ("APP CENTER", "hud-center apps")),
               (("ALERTS", "hud-menu alerts-toggle"), ("DIAGNOSTIC", f"{term} -H hud")))
     y = ry
     for group in groups:

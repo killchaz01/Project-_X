@@ -19,7 +19,7 @@ def main():
     wanted = {}
     apps = hudapps.desktop_entries()
     for app in apps:
-        if app["hidden"] or not app["exec"]:
+        if app["hidden"] or not app["exec"] or hudapps.is_helper(app):
             continue
         name = hudapps.app_name(app["id"], apps).replace("/", "-")
         source = os.path.join(app["folder"], app["id"] + ".desktop")

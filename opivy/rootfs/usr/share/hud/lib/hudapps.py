@@ -30,13 +30,14 @@ def desktop_entries():
                         if section != "[Desktop Entry]" or "=" not in line:
                             continue
                         k, _, val = line.partition("=")
-                        if k in ("Name", "Exec", "Icon", "StartupWMClass", "NoDisplay") and k not in info:
+                        if k in ("Name", "Exec", "Icon", "StartupWMClass", "NoDisplay", "Terminal") and k not in info:
                             info[k] = val
             except OSError:
                 continue
             apps.append({"id": info["id"], "folder": folder, "name": info.get("Name", info["id"]),
                          "exec": info.get("Exec", ""), "icon": info.get("Icon", ""),
-                         "wmclass": info.get("StartupWMClass", ""), "hidden": info.get("NoDisplay") == "true"})
+                         "wmclass": info.get("StartupWMClass", ""), "hidden": info.get("NoDisplay") == "true",
+                         "terminal": info.get("Terminal") == "true"})
     return apps
 
 
@@ -58,18 +59,27 @@ def find_entry(key, apps=None):
 
 # Plain names for the bundled apps, as a Mac names its own (Terminal, not
 # the program's name). Keyed by app id or program name.
-FRIENDLY = {"foot": "Terminal", "footclient": "Terminal", "org.xfce.thunar": "Files", "thunar": "Files",
+# Helper launchers that are not apps a person opens.
+HELPERS = {"footclient", "foot-server", "thunar-bulk-rename", "thunar-settings"}
+FRIENDLY = {"foot": "Terminal", "org.xfce.thunar": "Files", "thunar": "Files",
             "org.xfce.mousepad": "Text Editor", "mousepad": "Text Editor", "org.gnome.epiphany": "Web",
             "epiphany": "Web", "hud-center": "Application Center", "pavucontrol": "Sound",
-            "htop": "Activity Monitor", "wdisplays": "Displays", "blueman-manager": "Bluetooth"}
+            "htop": "Activity Monitor", "wdisplays": "Displays", "blueman-manager": "Bluetooth",
+            "org.xfce.ristretto": "Image Viewer", "ristretto": "Image Viewer", "mpv": "Media Player",
+            "org.gnome.evince": "Document Viewer", "evince": "Document Viewer"}
+
+
+def is_helper(app):
+    return app["id"].lower().split(".")[-1] in HELPERS
 
 
 def app_name(key, apps=None):
     """The name to show for an app id or program: friendly, else the app's own."""
     if not key:
         return ""
-    if key.lower() in FRIENDLY:
-        return FRIENDLY[key.lower()]
+    for k in (key.lower(), key.lower().split(".")[-1]):
+        if k in FRIENDLY:
+            return FRIENDLY[k]
     entry = find_entry(key, apps)
     return entry["name"] if entry else key.split(".")[-1].capitalize()
 
