@@ -54,12 +54,17 @@ It is laid out and behaves like macOS, in the station look.
 |---|---|
 | Apple menu | OP IVY at the top left: About This Computer, System Settings…, App Store…, Force Quit…, Sleep, Restart…, Shut Down…, Lock Screen, Log Out |
 | App name in bold, and its menu | The front app's name next to it, in bold. Click it: About, Hide, Quit, Minimise, Zoom, Enter Full Screen, Close Window, Bring All to Front |
-| Menu-bar extras, Control Center | NET, BT, VOL, ALERTS blocks; CONTROL opens the Control Center |
-| Spotlight | SEARCH in the bar, or Cmd+Space |
+| File, Edit, View, Window, Help | The same words in the bar. Each item presses the front app's own shortcut for it, so the menus work across apps. Terminal, Files and Web have their own lists; add more in `~/.config/hud/menus.conf` |
+| Menu-bar extras, Control Center | NET, BT, VOL blocks; CONTROL opens the Control Center |
+| Notification Centre | Click the clock: recent notifications, Do Not Disturb, Clear All |
+| Input menu | A layout block (US, DE …) appears when you have more than one keyboard layout; Ctrl+Space steps through them |
+| Spotlight | SEARCH in the bar, or Cmd+Space: apps, then files and folders in your home folder; anything else opens as a web address or a web search |
 | Clock | "Sun Nov 15 05:43 PM" at the top right |
-| Dock | Pinned apps, then (after a divider) any other running app, then the Trash. A mark under an app means it is running. Click a running app to bring it to the front; click again to step through its windows. Rest the pointer for its name. Right-click: New Window, Show, Hide, Keep in Dock / Remove from Dock, Quit |
+| Dock | Pinned apps, then (after a divider) any other running app, then the Trash. A mark under an app means it is running. Click a running app to bring it to the front; click again to step through its windows. Rest the pointer for its name. Drag a pinned icon onto another to reorder. Drop files on the Trash, or on an app to open them. Right-click: New Window, Show, Hide, Keep in Dock / Remove from Dock, Quit |
 | Red, yellow, green buttons | Same colours, same place; grey on inactive windows; the sign shows on hover |
-| Launchpad, Applications | Application Center: the grid icon in the dock, or Cmd+Shift+A |
+| Launchpad, Applications | Application Center: the grid icon in the dock, or Cmd+Shift+A. Files also has an Applications folder in its sidebar: every app, double-click to open |
+| Files on the desktop | Anything in your Desktop folder shows at the top right. Double-click to open; right-click for Open, Show in Files, Move to Trash; right-click the desktop for New Folder |
+| Preview, QuickTime | Image Viewer (Ristretto), Document Viewer (Evince), Media Player (mpv) open pictures, PDFs and films |
 | App Store | Catalogue in the Application Center, or App Store… in the system menu |
 | Finder, Terminal, Safari, TextEdit | Files (Thunar), Terminal (foot), Web (Epiphany), Text Editor (Mousepad) |
 | System Settings | Control Center: CONTROL in the bar, or Cmd+, |
@@ -70,7 +75,8 @@ It is laid out and behaves like macOS, in the station look.
 | Cmd+W | Close the window |
 | Cmd+H / Cmd+M | Hide the app / minimise the window |
 | Cmd+Tab | Switch windows |
-| Cmd+Space | Spotlight-style search |
+| Cmd+Space | Search apps and files |
+| Ctrl+Space | Next keyboard layout |
 | Cmd+C, Cmd+X, Cmd+V, Cmd+A | Copy, cut, paste, select all, in the terminal and in text fields of GTK 3 apps (Files, Text Editor, dialogs) |
 | Cmd+Option+Esc | Force Quit |
 | Cmd+Shift+3 / 4 / 5 | Screenshot of the screen / of an area / the screenshot menu, saved to Pictures |
@@ -81,7 +87,8 @@ It is laid out and behaves like macOS, in the station look.
 
 The Super (Windows) key is Cmd on a PC keyboard. Differences you will
 notice: apps keep their own File/Edit/View menus inside their windows
-rather than in the top bar; Cmd+C and Cmd+V do not reach GTK 4 apps such as
+rather than in the top bar (the bar's File, Edit, View menus press the app's shortcuts
+instead of showing its real menus); Cmd+C and Cmd+V do not reach GTK 4 apps such as
 the Web browser (use Ctrl+C and Ctrl+V there); there is no Mission Control;
 and Mac apps do not run.
 
@@ -96,7 +103,6 @@ and Mac apps do not run.
 | LIGHT | screen brightness | | scroll to change |
 | VOL | volume | sound settings | scroll to change, right-click to mute |
 | PWR | battery | | |
-| ALERTS | notifications on or off | switch | |
 | CONTROL | | open Control Center | |
 | SEARCH | | search apps | |
 
@@ -131,6 +137,20 @@ hand over the clickable parts and a tooltip says what each one does.
 | Meters | CPU, memory, disk, network | process list |
 
 Right-click anywhere on the console for the system menu.
+
+## Keyboard, language and hardware
+
+- **Keyboard layout**: Control Center, Keyboard and Language. Or
+  `hudctl set keyboard_layout de`. Each layout you pick stays on offer in
+  the bar's layout block.
+- **Language and time zone**: the button in the same place, or run
+  `hud-language`. It asks for your password and takes effect at the next
+  login.
+- **Hardware Check**: Help, Hardware Check (or `hud-hwcheck`). It reports
+  whether graphics, Wi-Fi, Bluetooth, sound, battery, brightness, sleep,
+  trackpad, camera and firmware are working on the machine it runs on, and
+  changes nothing. Run it on a real computer and keep the output when
+  asking for help.
 
 ## Application Center
 

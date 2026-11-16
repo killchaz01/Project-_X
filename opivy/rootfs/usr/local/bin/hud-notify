@@ -102,7 +102,7 @@ class Panel(Gtk.Window):
 
         scroll = Gtk.ScrolledWindow()
         scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
-        scroll.set_min_content_height(120)
+        scroll.set_min_content_height(260)
         scroll.set_max_content_height(520)
         scroll.set_propagate_natural_height(True)
         self.list = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
