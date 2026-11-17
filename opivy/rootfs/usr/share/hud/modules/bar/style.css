@@ -30,8 +30,8 @@ tooltip label { color: {{title}}; font-family: "{{font_mono}}", monospace; font-
 #custom-m-help:hover { color: {{bg}}; background: {{line}}; }
 #custom-kbd { margin: 3px 2px; padding: 0 6px; color: {{line}}; }
 #custom-kbd:hover { color: {{bg}}; background: {{line}}; }
-#hardware, #prefs { margin: 0 6px; }
-#tray { margin: 0 8px; }
+#hardware, #prefs { margin: 0 2px; }
+#tray { margin: 0 5px; }
 
 /* The name plate: lit, with dark lettering. */
 #custom-menu {

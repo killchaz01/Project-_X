@@ -9,7 +9,6 @@ works across apps. Items, and the keys each app uses, are listed in
 /usr/share/hud/menus.conf; add your own in ~/.config/hud/menus.conf.
 """
 import os
-import shlex
 import subprocess
 import sys
 import time
@@ -17,60 +16,7 @@ import time
 sys.path.insert(0, "/usr/share/hud/lib")
 import hudapps  # noqa: E402
 
-MODS = {"ctrl": "ctrl", "shift": "shift", "alt": "alt", "cmd": "logo", "logo": "logo"}
-
-
-def front_app():
-    try:
-        out = subprocess.run(["wlrctl", "toplevel", "list", "state:focused"],
-                             capture_output=True, text=True, timeout=2).stdout
-    except (OSError, subprocess.SubprocessError):
-        return ""
-    return out.split("\n", 1)[0].partition(":")[0].strip()
-
-
-def read_menus():
-    rows = []
-    for path in ("/usr/share/hud/menus.conf", os.path.join(hudapps.USER, "menus.conf")):
-        try:
-            with open(path) as f:
-                for line in f:
-                    parts = [p.strip() for p in line.split("|")]
-                    if len(parts) == 4 and not line.lstrip().startswith("#"):
-                        rows.append(parts)
-        except OSError:
-            pass
-    return rows
-
-
-def items_for(app, menu, rows):
-    keys = [app.lower(), app.lower().split(".")[-1]] if app else ["desktop"]
-    own = [(label, action) for a, m, label, action in rows if m == menu and a.lower() in keys]
-    if own or not app:
-        return own
-    return [(label, action) for a, m, label, action in rows if m == menu and a == "*"]
-
-
-def hint(action):
-    if action.startswith("@"):
-        return ""
-    return "+".join(p.upper() if len(p) == 1 else p.capitalize() for p in action.split("+"))
-
-
-def press(action):
-    *mods, key = action.split("+")
-    args = ["wtype"]
-    for m in mods:
-        args += ["-M", MODS.get(m.lower(), m.lower())]
-    args += ["-k", key]
-    for m in reversed(mods):
-        args += ["-m", MODS.get(m.lower(), m.lower())]
-    subprocess.run(args)
-
-
-def run(command):
-    subprocess.Popen(command, shell=True, start_new_session=True, cwd=hudapps.HOME,
-                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+import hudmenus  # noqa: E402
 
 
 def main():
@@ -78,31 +24,19 @@ def main():
         print(__doc__.strip())
         sys.exit(1)
     menu = sys.argv[1]
-    app = front_app()
-    items = items_for(app, menu, read_menus())
+    app, _title = hudmenus.front_window()
+    items = hudmenus.items_for(app, menu, hudmenus.read_menus())
     if not items:
         return
     width = max(len(label) for label, _a in items) + 4
-    lines = [f"{label:<{width}}{hint(action)}".rstrip() for label, action in items]
+    lines = [f"{label:<{width}}{hudmenus.hint(action)}".rstrip() for label, action in items]
     out = subprocess.run(["fuzzel", "--dmenu", "--prompt", menu.upper() + " > ", "--lines", str(len(lines)),
                           "--width", "40"], input="\n".join(lines), capture_output=True, text=True).stdout.strip("\n")
     if out not in lines:
         return
     action = items[lines.index(out)][1]
-    quoted = shlex.quote("app_id:" + app)
     time.sleep(0.35)        # let the menu close and the app take the keyboard back
-    if action == "@minimize":
-        run(f"wlrctl toplevel minimize {quoted} state:focused")
-    elif action == "@hide":
-        run(f"wlrctl toplevel minimize {quoted}")
-    elif action == "@front":
-        run(f"wlrctl toplevel focus {quoted}")
-    elif action == "@quit":
-        run(f"wlrctl toplevel close {quoted}")
-    elif action.startswith("@run:"):
-        run(action[5:])
-    else:
-        press(action)
+    hudmenus.perform(app, action)
 
 
 if __name__ == "__main__":

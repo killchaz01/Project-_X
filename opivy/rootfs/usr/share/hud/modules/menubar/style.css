@@ -1,0 +1,35 @@
+/* Written by hudctl from the active theme. The left of the menu bar. */
+window.hud-menubar {
+  background: alpha({{bg}}, {{bar_opacity}});
+  border-{{bar_edge}}: {{border_width}}px solid {{line}};
+}
+window.hud-menubar * {
+  font-family: "{{font_ui}}", "DejaVu Sans", sans-serif;
+  font-size: {{bar_font_size}}pt;
+  font-weight: bold;
+}
+window.hud-menubar button {
+  min-height: 0; min-width: 0; margin: 2px 2px; padding: 0 8px; box-shadow: none; text-shadow: none;
+  border-image: none; border: none; border-radius: 0; background-image: none;
+  background-color: transparent; color: {{title}};
+}
+/* The name plate: lit, with dark lettering. */
+window.hud-menubar button.logo {
+  margin-left: 4px; padding: 0 12px; letter-spacing: 2px;
+  color: {{bg}}; background-color: {{line}};
+}
+window.hud-menubar button.logo:hover { background-color: {{cyan}}; }
+/* The front app's name, bold as on a Mac. */
+window.hud-menubar button.appname { margin-left: 8px; letter-spacing: 2px; font-weight: 900; }
+window.hud-menubar button.appname:hover { color: {{bg}}; background-color: {{line}}; }
+window.hud-menubar menubar.menus { background: none; border: none; box-shadow: none; padding: 0; margin: 2px 0; min-height: 0; }
+window.hud-menubar menubar.menus > menuitem { padding: 0 6px; margin: 0; border: none; color: {{text}}; min-height: 0; }
+window.hud-menubar menubar.menus > menuitem label { margin: 0; padding: 0; }
+window.hud-menubar menubar.menus > menuitem:hover { color: {{bg}}; background: {{line}}; }
+/* The drop-downs read like ordinary text, not like the bar. */
+window.hud-menubar menu { font-weight: normal; padding: 4px 0; }
+window.hud-menubar menu menuitem { padding: 5px 12px; font-size: {{font_size}}pt; font-weight: normal; }
+window.hud-menubar menu menuitem label { font-weight: normal; }
+window.hud-menubar menu menuitem:disabled { color: {{muted}}; }
+window.hud-menubar menu accelerator, window.hud-menubar menu .dim-label { color: {{muted}}; }
+window.hud-menubar menu menuitem:hover accelerator, window.hud-menubar menu menuitem:hover .dim-label { color: {{bg}}; }

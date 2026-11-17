@@ -1,0 +1,298 @@
+#!/usr/bin/env python3
+"""hud-menubar - the left of the menu bar: system menu, app name, the app's menus.
+
+Shows the real menus of the app in front, as a Mac does: the app's own
+File, Edit, View ... with their submenus, shortcuts and greyed-out
+items, taken from the app and removed from its window. This works for
+apps that have a menu bar of their own and publish it (Files, Text
+Editor and most GTK 3 apps).
+
+For apps that publish none (Terminal, Web), it shows the standard menus
+from menus.conf, whose items press the app's shortcuts.
+"""
+import json
+import os
+import re
+import subprocess
+import sys
+
+# This program shows other apps' menus; it must not hand over its own.
+os.environ["GTK_MODULES"] = ""
+os.environ["UBUNTU_MENUPROXY"] = "0"
+
+sys.path.insert(0, "/usr/share/hud/lib")
+import hudapps  # noqa: E402
+import hudmenus  # noqa: E402
+
+import gi  # noqa: E402
+gi.require_version("Gtk", "3.0")
+gi.require_version("Gdk", "3.0")
+gi.require_version("GtkLayerShell", "0.1")
+from gi.repository import Gdk, Gio, GLib, Gtk, GtkLayerShell  # noqa: E402
+
+DBUS = ("org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus")
+
+
+def settings():
+    try:
+        with open(os.path.join(hudapps.USER, "resolved.json")) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+class Export:
+    """One app's published menus: where they are, and the actions behind them."""
+
+    def __init__(self, bus, name, menu_path, action_paths):
+        self.model = Gio.DBusMenuModel.get(bus, name, menu_path)
+        self.groups = {}
+        shortest = min(action_paths, key=len) if action_paths else None
+        for path in action_paths:
+            if path == menu_path:
+                prefix = "unity"
+            elif re.search(r"/window/\d+$", path):
+                prefix = "win"
+            elif path == shortest:
+                prefix = "app"
+            else:
+                continue
+            self.groups.setdefault(prefix, Gio.DBusActionGroup.get(bus, name, path))
+
+
+class MenuBar(Gtk.Window):
+    def __init__(self, v):
+        super().__init__()
+        self.v = v
+        self.bus = Gio.bus_get_sync(Gio.BusType.SESSION)
+        # Apps hand their menus over only while something claims to be showing them.
+        Gio.bus_own_name_on_connection(self.bus, "com.canonical.AppMenu.Registrar",
+                                       Gio.BusNameOwnerFlags.NONE, None, None)
+        self.app, self.export, self.exports, self.menubar = None, None, {}, None
+        self.rows = hudmenus.read_menus()
+        self.pending = None
+
+        GtkLayerShell.init_for_window(self)
+        GtkLayerShell.set_layer(self, GtkLayerShell.Layer.TOP)
+        GtkLayerShell.set_namespace(self, "hud-menubar")
+        edge = GtkLayerShell.Edge.BOTTOM if v.get("bar_position") == "bottom" else GtkLayerShell.Edge.TOP
+        GtkLayerShell.set_anchor(self, edge, True)
+        GtkLayerShell.set_anchor(self, GtkLayerShell.Edge.LEFT, True)
+        GtkLayerShell.set_exclusive_zone(self, -1)      # sit beside the status bar, not under it
+        width, height = int(v.get("menubar_width", "620")), int(v.get("bar_height", "38"))
+        self.set_size_request(width, height)
+        self.set_default_size(width, height)
+        self.set_resizable(False)
+        self.get_style_context().add_class("hud-menubar")
+
+        self.box = Gtk.Box()
+        self.add(self.box)
+        logo = Gtk.Button(label=f"{v.get('mark_a', '')} {v.get('logo_text', 'SYSTEM')}".strip())
+        logo.get_style_context().add_class("logo")
+        logo.connect("clicked", lambda _b: hudmenus.run("hud-menu"))
+        self.box.pack_start(logo, False, False, 0)
+        self.name = Gtk.Button(label="DESKTOP")
+        self.name.get_style_context().add_class("appname")
+        self.name.connect("clicked", lambda _b: hudmenus.run("hud-menu app"))
+        self.box.pack_start(self.name, False, False, 0)
+
+        self.connect("destroy", Gtk.main_quit)
+        self.show_all()
+        self.poll()
+        GLib.timeout_add(600, self.poll)
+
+    # ------------------------------------------------- which app is in front
+    def poll(self):
+        app, _title = hudmenus.front_window()
+        if app != self.app:
+            self.app = app
+            self.name.set_label((hudapps.app_name(app) if app else "Desktop").upper())
+            self.export = self.find_export(app) if app else None
+            if self.export:
+                self.export.model.connect("items-changed", lambda *_: self.later())
+            self.rebuild()
+        elif app and not self.export:
+            # An app publishes its menus a moment after its window opens.
+            self.tries = getattr(self, "tries", 0) + 1
+            if self.tries % 3 == 0 and self.tries < 40:
+                self.export = self.find_export(app)
+                if self.export:
+                    self.export.model.connect("items-changed", lambda *_: self.later())
+                    self.rebuild()
+        return True
+
+    def later(self):
+        """Menus arrive in pieces; rebuild once they settle."""
+        if self.pending:
+            GLib.source_remove(self.pending)
+
+        def fire():
+            self.pending = None
+            self.rebuild()
+            return False
+        self.pending = GLib.timeout_add(150, fire)
+
+    # ---------------------------------------------- finding published menus
+    def call(self, dest, path, iface, method, args=None, timeout=800):
+        return self.bus.call_sync(dest, path, iface, method, args, None, Gio.DBusCallFlags.NONE,
+                                  timeout, None).unpack()
+
+    def names_for(self, app):
+        """Bus names owned by the program behind an app id."""
+        keys = {app.lower(), app.lower().split(".")[-1]}
+        found = []
+        try:
+            names = self.call(*DBUS, "ListNames")[0]
+        except GLib.Error:
+            return found
+        for n in names:
+            if not n.startswith(":"):
+                continue
+            try:
+                pid = self.call(*DBUS, "GetConnectionUnixProcessID", GLib.Variant("(s)", (n,)))[0]
+                with open(f"/proc/{pid}/cmdline", "rb") as f:
+                    exe = os.path.basename(f.read().split(b"\0")[0].decode(errors="replace")).lower()
+            except (GLib.Error, OSError):
+                continue
+            if exe in keys or exe.lstrip(".").split("-wrapped")[0] in keys:
+                found.append(n)
+        return found
+
+    def walk(self, name, path, menus, actions, depth=0):
+        try:
+            xml = self.call(name, path, "org.freedesktop.DBus.Introspectable", "Introspect")[0]
+        except GLib.Error:
+            return
+        if 'interface name="org.gtk.Menus"' in xml:
+            menus.append(path)
+        if 'interface name="org.gtk.Actions"' in xml:
+            actions.append(path)
+        if depth < 8:
+            for child in re.findall(r'<node name="([^"]+)"', xml):
+                self.walk(name, path.rstrip("/") + "/" + child, menus, actions, depth + 1)
+
+    def find_export(self, app):
+        if app in self.exports:
+            return self.exports[app]
+        for name in self.names_for(app):
+            menus, actions = [], []
+            self.walk(name, "/", menus, actions)
+            bars = [m for m in menus if "menubar" in m]
+            if bars:
+                # A window's own bar (.../menubar/0) wins over the app-wide one.
+                bars.sort(key=lambda p: (not re.search(r"/menubar/\d+$", p), p))
+                self.exports[app] = Export(self.bus, name, bars[0], actions)
+                return self.exports[app]
+        return None
+
+    # ------------------------------------------------------ building the bar
+    def top_items(self, model):
+        """The bar's top-level entries as (label, submenu model), sections flattened."""
+        out = []
+        for i in range(model.get_n_items()):
+            section = model.get_item_link(i, "section")
+            if section:
+                out += self.top_items(section)
+                continue
+            label = model.get_item_attribute_value(i, "label", GLib.VariantType.new("s"))
+            sub = model.get_item_link(i, "submenu")
+            if label and sub and label.unpack().strip():
+                out.append((label.unpack(), sub))
+        # Some apps publish their bar twice (their own copy and the module's).
+        seen, once = set(), []
+        for label, sub in out:
+            if label not in seen:
+                seen.add(label)
+                once.append((label, sub))
+        return once
+
+    def rebuild(self):
+        if self.menubar:
+            self.box.remove(self.menubar)
+        bar = Gtk.MenuBar()
+        bar.get_style_context().add_class("menus")
+        real = self.top_items(self.export.model) if self.export else []
+        if real:
+            self.keep = []
+            for prefix, group in self.export.groups.items():
+                bar.insert_action_group(prefix, group)
+            for label, sub in real:
+                item = Gtk.MenuItem(label=label.replace("_", "").upper())
+                item.set_submenu(Gtk.Menu.new_from_model(sub))
+                bar.append(item)
+                self.keep.append(sub)
+        else:
+            for menu in hudmenus.MENUS:
+                item = self.standard_menu(menu, self.app or "")
+                if item:
+                    bar.append(item)
+        self.menubar = bar
+        self.box.pack_start(bar, False, False, 0)
+        bar.show_all()
+        self.fit(bar)
+
+    def fit(self, bar):
+        """Menus that do not fit in the strip move into a last menu, "»"."""
+        limit = int(self.v.get("menubar_width", "620")) - 8
+        used = sum(w.get_preferred_width()[1] + 8 for w in (self.box.get_children()[0], self.name))
+        more = None
+        while len(bar.get_children()) > 1 and used + bar.get_preferred_width()[1] > limit:
+            tops = bar.get_children()
+            last = tops[-2] if more else tops[-1]       # keep "»" at the end
+            if last is more:
+                break
+            if not more:
+                more = Gtk.MenuItem(label="\u00bb")
+                more.set_submenu(Gtk.Menu())
+                bar.append(more)
+                more.show()
+            bar.remove(last)
+            last.set_label(last.get_label().title())
+            more.get_submenu().prepend(last)
+            last.show()
+
+    def standard_menu(self, menu, app):
+        """One menu from menus.conf: its items press the app's shortcuts."""
+        items = hudmenus.items_for(app, menu, self.rows)
+        if not items:
+            return None
+        top = Gtk.MenuItem(label=menu.upper())
+        sub = Gtk.Menu()
+        for label, action in items:
+            entry = Gtk.MenuItem()
+            row = Gtk.Box(spacing=24)
+            row.pack_start(Gtk.Label(label=label, xalign=0), True, True, 0)
+            keys = Gtk.Label(label=hudmenus.hint(action), xalign=1)
+            keys.get_style_context().add_class("dim-label")
+            row.pack_end(keys, False, False, 0)
+            entry.add(row)
+            # Wait for the menu to close and the app to have the keyboard again.
+            entry.connect("activate", lambda _m, a=action, target=app: GLib.timeout_add(
+                350, lambda: hudmenus.perform(target, a) and False))
+            sub.append(entry)
+        top.set_submenu(sub)
+        return top
+
+
+def main():
+    if len(sys.argv) > 1 and sys.argv[1] in ("-h", "--help"):
+        print(__doc__.strip())
+        return
+    v = settings()
+    if not v:
+        sys.exit("hud-menubar: no settings yet (run: hudctl apply)")
+    if not GtkLayerShell.is_supported():
+        sys.exit("hud-menubar: this desktop does not support layer-shell")
+    css = Gtk.CssProvider()
+    try:
+        css.load_from_path(os.path.join(hudapps.USER, "menubar", "style.css"))
+        Gtk.StyleContext.add_provider_for_screen(Gdk.Screen.get_default(), css,
+                                                 Gtk.STYLE_PROVIDER_PRIORITY_USER + 1)
+    except GLib.Error as e:
+        print("hud-menubar:", e, file=sys.stderr)
+    MenuBar(v)
+    Gtk.main()
+
+
+if __name__ == "__main__":
+    main()

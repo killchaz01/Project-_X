@@ -142,6 +142,9 @@ def derive(v):
     v["current_theme"] = v["theme"].upper()
 
     v["mark_a"], v["mark_b"], v["mark_check"] = MARKS[0], MARKS[1], CHECK
+    # Apps publish their menus for the bar when this module is loaded into them.
+    v["global_menu_env"] = ("GTK_MODULES=appmenu-gtk-module\nUBUNTU_MENUPROXY=1"
+                            if v.get("global_menu", "yes") == "yes" else "")
 
     # Dock: turn "LABEL:command" entries into waybar modules. With
     # dock_style = icons each pin is the app's icon (its name shows on

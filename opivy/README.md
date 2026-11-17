@@ -54,7 +54,7 @@ It is laid out and behaves like macOS, in the station look.
 |---|---|
 | Apple menu | OP IVY at the top left: About This Computer, System Settings…, App Store…, Force Quit…, Sleep, Restart…, Shut Down…, Lock Screen, Log Out |
 | App name in bold, and its menu | The front app's name next to it, in bold. Click it: About, Hide, Quit, Minimise, Zoom, Enter Full Screen, Close Window, Bring All to Front |
-| File, Edit, View, Window, Help | The same words in the bar. Each item presses the front app's own shortcut for it, so the menus work across apps. Terminal, Files and Web have their own lists; add more in `~/.config/hud/menus.conf` |
+| The app's menus in the top bar | The front app's **real** menus: its own File, Edit, View … with submenus, shortcuts and greyed-out items, moved out of its window into the bar. This works for apps that have a menu bar and publish it: Files, Text Editor and most GTK 3 apps. Apps with no menu bar (Terminal, Web) get standard File, Edit, View, Window, Help menus whose items press the app's shortcuts (`menus.conf`). Menus that do not fit go into a last menu, » |
 | Menu-bar extras, Control Center | NET, BT, VOL blocks; CONTROL opens the Control Center |
 | Notification Centre | Click the clock: recent notifications, Do Not Disturb, Clear All |
 | Input menu | A layout block (US, DE …) appears when you have more than one keyboard layout; Ctrl+Space steps through them |
@@ -86,9 +86,10 @@ It is laid out and behaves like macOS, in the station look.
 | Cmd+Shift+A | Application Center |
 
 The Super (Windows) key is Cmd on a PC keyboard. Differences you will
-notice: apps keep their own File/Edit/View menus inside their windows
-rather than in the top bar (the bar's File, Edit, View menus press the app's shortcuts
-instead of showing its real menus); Cmd+C and Cmd+V do not reach GTK 4 apps such as
+notice: only apps that publish a menu bar show their real menus in the top
+bar (GTK 3 apps do; Qt, GTK 4 and Electron apps get the standard menus,
+and any menu bar of their own stays in their window); with two windows of
+one app open, the bar shows the first window's menus; Cmd+C and Cmd+V do not reach GTK 4 apps such as
 the Web browser (use Ctrl+C and Ctrl+V there); there is no Mission Control;
 and Mac apps do not run.
 
@@ -233,7 +234,8 @@ How it fits together:
 | Module | Part of the desktop | Program underneath |
 |---|---|---|
 | `windows` | borders, title bars, shortcuts | labwc |
-| `bar` | menu bar | waybar |
+| `bar` | menu bar: status blocks and clock | waybar |
+| `menubar` | menu bar: system menu, app name, the app's real menus | hud-menubar |
 | `dock` | dock | hud-dock (or waybar for the other dock styles) |
 | `launcher` | Cmd+Space search | fuzzel |
 | `notify` | notifications | mako |

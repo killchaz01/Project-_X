@@ -3,6 +3,7 @@
   "position": "{{bar_position}}",
   "height": {{bar_height}},
   "spacing": 0,
+  "margin-left": {{menubar_width}},
   "modules-left": {{bar_left_json}},
   "modules-center": {{bar_center_json}},
   "modules-right": {{bar_right_json}},
@@ -37,7 +38,7 @@
 
   "network": {
     "format-wifi": "NET {signalStrength}%",
-    "format-ethernet": "NET LINK",
+    "format-ethernet": "NET ON",
     "format-linked": "NET NO ADDRESS",
     "format-disconnected": "NET OFFLINE",
     "tooltip-format": "{essid} {ifname} {ipaddr}\nClick: network settings",
