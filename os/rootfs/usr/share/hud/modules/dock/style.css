@@ -15,13 +15,14 @@ tooltip label { color: {{title}}; }
 
 /* Pinned launchers: one framed tile each. */
 .modules-center .module {
-  margin: 0 1px;
+  margin: 0 3px;
   color: {{alert}};
+  font-size: {{dock_label_size}}pt;
   letter-spacing: 1px;
   text-shadow: 0 0 {{glow_px}}px alpha({{alert}}, 0.9), 0 0 {{glow_wide}}px alpha({{alert}}, 0.5);
   {{frame_dock_alert}}
 }
-.modules-center .module:hover { color: {{bg}}; text-shadow: none; {{frame_dock_alert_fill}} }
+.modules-center .module:hover { color: {{warn}}; {{frame_dock_alert_fill}} }
 
 /* Open windows. */
 #taskbar { background: none; border: none; padding: 0; margin: 0 0 0 10px; min-width: 0; }

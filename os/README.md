@@ -23,7 +23,7 @@ internals.
 |---|---|
 | Menu bar | Bar at the top: system menu, window title, hardware read-outs, preference blocks, clock |
 | Apple menu | The button at the top left |
-| Dock | Dock at the bottom: pinned launcher tiles, then open windows |
+| Dock | Dock at the bottom: pinned launcher tiles with their names underneath, then open windows |
 | Launchpad, App Store | Application Center: the APPS tile, or Cmd+A |
 | Spotlight (Cmd+Space) | Launcher, Cmd+Space |
 | Close, minimise, zoom at top left | Same place (can be moved right) |
@@ -69,8 +69,8 @@ and `hudctl set bar_prefs ...`; more are listed in
 
 Open it from the APPS tile in the dock, Cmd+A, or the system menu.
 
-- **Apps**: every installed app as a grid of interlocking three-bar tiles,
-  with the name on the level bar and the icon in the opening. Click one to
+- **Apps**: every installed app as a grid of interlocking three-bar tiles:
+  solid bars, the icon in the opening, the name underneath. Click one to
   start it; type to filter.
 - **Catalogue**: about 45 common apps by category. Blue cells can be
   installed, green ones are installed. Pick one and press Install; a

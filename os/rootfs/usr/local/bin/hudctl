@@ -133,9 +133,10 @@ def derive(v):
     v["height_dockicon"] = v["height_dock"]
     v["tile_w_dockicon"], v["tile_h_dockicon"] = v["tile_w_dock"], v["tile_h_dock"]
     tri = v["shape_dockicon"] == "tri"
-    icon = 24 if tri else int(v.get("dock_icon_size", "30"))
+    icon = 16 if tri else int(v.get("dock_icon_size", "30"))
     tile_w = int(tri_size(*TRI)[0]) + 2 * (2 + int(v["glow_px"]) // 3) if tri else 84
     v["dock_icon_px"] = str(icon)
+    v["dock_label_size"] = str(max(7, int(v.get("font_size", "11")) - 3) if tri else v.get("font_size", "11"))
     v["dock_icon_margin"] = str(max(0, (tile_w - icon) // 2 - 3))
     v["current_theme"] = v["theme"].upper()
 
@@ -165,7 +166,7 @@ def derive(v):
 # the toolkit, which is how blocks get shapes plain CSS cannot make.
 SHAPES = ("round", "cut", "tab", "bar", "hex", "slant", "pill", "bracket", "tri", "hexagon")
 # The tri tile used in the dock: opening size, bar thickness, corner distance.
-TRI = (34, 18, 50)
+TRI = (24, 12, 35)
 
 
 def shape_points(shape, x0, y0, x1, y1, c):
@@ -253,12 +254,22 @@ def frame_css(v, ctx, colour_key, filled):
         w, h = int(v["tile_w_" + ctx]), int(v["tile_h_" + ctx])
         push = 0
         if shape == "tri":
-            # Text sits in the level bar; an icon sits in the opening.
             r, t, d = TRI
             tw, th = tri_size(r, t, d)
             w, h = int(tw) + 2 * g, int(th) + 2 * g
-            target = g + d + 3 if ctx.endswith("icon") else g + d + r / 2 + t / 2
-            push = int(round(2 * (target - h / 2)))
+            svg = shape_svg(shape, w, h, colour, fill, opacity, stroke, glow, radius)
+            if ctx.endswith("icon"):
+                # An icon sits in the opening, whose centre is d below the top.
+                push = int(round(2 * (g + d - h / 2)))
+                css = (f'background: url("{path}") center / {w}px {h}px no-repeat; border: none; '
+                       f'min-width: {w}px; min-height: {h - push}px; padding: {push}px 0 0 0;')
+            else:
+                # The title is too long for so small a tile: it sits underneath.
+                css = (f'background: url("{path}") center top / {w}px {h}px no-repeat; border: none; '
+                       f'min-width: {w}px; min-height: 14px; padding: {h - 2}px 0 0 0;')
+            with open(path, "w") as f:
+                f.write(svg)
+            return css
         svg = shape_svg(shape, w, h, colour, fill, opacity, stroke, glow, radius)
         css = (f'background: url("{path}") center / {w}px {h}px no-repeat; border: none; '
                f'min-width: {w}px; min-height: {h - push}px; padding: {push}px 0 0 0;')

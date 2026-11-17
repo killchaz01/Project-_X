@@ -57,7 +57,7 @@ def run(command):
 
 
 def load_icon(name, size=None):
-    size = size or (44 if V.get("shape_cell", "tri") == "hexagon" else 34)
+    size = size or (44 if V.get("shape_cell", "tri") == "hexagon" else 20)
     theme = Gtk.IconTheme.get_default()
     for candidate in (name, (name or "").lower(), "application-x-executable"):
         if not candidate:
@@ -82,7 +82,8 @@ class HexGrid(Gtk.DrawingArea):
 
     R = 64          # hexagon: centre to corner
     GAP = 10
-    TRI = (46, 22, 65)   # tri: opening size, bar thickness, corner distance
+    TRI = (30, 14, 42)   # tri: opening size, bar thickness, corner distance
+    LABEL = 16           # tri: room under each row for the titles
 
     def __init__(self, on_activate):
         super().__init__()
@@ -110,17 +111,18 @@ class HexGrid(Gtk.DrawingArea):
             inner = r / 2 + t
             # Neighbours point opposite ways; this spacing keeps their
             # slanted sides parallel and GAP apart.
-            pitch = (2 * inner + self.GAP + (inner - d) / 2) * 2 / math.sqrt(3)
+            pitch = (2 * inner + self.GAP + 4 + (inner - d) / 2) * 2 / math.sqrt(3)
             cols = max(1, int((width - 40 - w) // pitch) + 1)
             self.centres, self.ups = [], []
             for i in range(len(self.items)):
                 row, col = divmod(i, cols)
                 up = (row + col) % 2 == 0
-                top = 16 + row * (h + self.GAP)
+                top = 16 + row * (h + self.LABEL + self.GAP)
                 self.centres.append((20 + w / 2 + col * pitch, top + (d if up else inner)))
                 self.ups.append(up)
             rows = (len(self.items) + cols - 1) // cols
-            self.set_size_request(-1, int(32 + rows * (h + self.GAP)))
+            self.pitch, self.cell_h = pitch, h
+            self.set_size_request(-1, int(32 + rows * (h + self.LABEL + self.GAP)))
             return
         w = math.sqrt(3) * self.R + self.GAP
         cols = max(1, int((width - w / 2 - 20) // w))
@@ -179,9 +181,13 @@ class HexGrid(Gtk.DrawingArea):
                     a = math.radians(30 + 60 * k)
                     cr.line_to(cx + self.R * math.cos(a), cy + self.R * math.sin(a))
                 cr.close_path()
-            cr.set_source_rgba(*rgb("panel", "#0b0b24"), 0.9)
+            if self.tri:
+                # Solid bars; the opening between them stays see-through.
+                cr.set_source_rgba(*colour, 1)
+            else:
+                cr.set_source_rgba(*rgb("panel", "#0b0b24"), 0.9)
             cr.fill_preserve()
-            if i == self.hover:
+            if i == self.hover and not self.tri:
                 cr.set_source_rgba(*colour, 0.16)
                 cr.fill_preserve()
             cr.set_line_join(1)
@@ -196,17 +202,17 @@ class HexGrid(Gtk.DrawingArea):
 
             icon = item.get("icon")
             if self.tri:
-                r, t, _d = self.TRI
-                turn = 1 if self.ups[i] else -1
-                mid = cy + turn * 4                    # middle of the opening
-                plate = cy + turn * (r / 2 + t / 2)    # middle of the level bar
+                r, t, d = self.TRI
+                inner = r / 2 + t
                 if icon:
                     Gdk.cairo_set_source_pixbuf(cr, icon, cx - icon.get_width() / 2,
-                                                mid - icon.get_height() / 2)
+                                                cy - icon.get_height() / 2)
                     cr.paint()
                 else:
-                    self.text(cr, item["name"][:1].upper(), cx, mid - 17, colour, 20, 40)
-                self.text(cr, item["name"].upper(), cx, plate - 6, colour, 7.5, r * 1.85)
+                    self.text(cr, item["name"][:1].upper(), cx, cy - 10, colour, 11, 24)
+                # Titles share one line under the row, whichever way the cell points.
+                bottom = cy + (inner if self.ups[i] else d)
+                self.text(cr, item["name"].upper(), cx, bottom + 3, colour, 7, self.pitch - 4)
                 continue
             if icon:
                 Gdk.cairo_set_source_pixbuf(cr, icon, cx - icon.get_width() / 2, cy - 36)
