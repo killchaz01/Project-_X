@@ -16,6 +16,8 @@ set in one place, `config/version`.
 
 ![The app menu, opened from the app's name in the menu bar](docs/appmenu.png)
 
+![An app's real menu in the top bar: Files' View menu](docs/realmenu.png)
+
 ![The system menu, like the Apple menu](docs/sysmenu.png)
 
 ![Application Center](docs/apps.png)
@@ -332,6 +334,9 @@ with BIOS and with UEFI firmware. Checked there:
 - Menu bar: the front app's name opens the app menu, and Zoom maximises the
   window between the bar and the dock. Right-clicking the desktop opens the
   system menu; Restart asks for confirmation.
+- Real menus: Text Editor's and Files' own menus appear in the top bar with
+  submenus, tick boxes and greyed-out items; File, New Window in Text Editor
+  opened a second window.
 - Red, yellow and green window buttons sit at the top left.
 - Cmd+Return opens a terminal, Cmd+Space search, Cmd+Q quits the app.
 - Wired network, name lookup and web access work. The sound card is found
