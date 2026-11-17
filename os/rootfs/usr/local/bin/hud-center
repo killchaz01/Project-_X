@@ -5,7 +5,7 @@
   hud-center catalog   open on the catalogue of apps you can install
   hud-center prefs     open on the preferences
 
-Apps are drawn as a honeycomb. Preferences are a front end to hudctl:
+Apps are drawn as interlocking tiles. Preferences are a front end to hudctl:
 every control here runs "hudctl set KEY VALUE".
 """
 import json
@@ -24,9 +24,11 @@ gi.require_version("PangoCairo", "1.0")
 from gi.repository import Gdk, GdkPixbuf, Gio, GLib, Gtk, Pango, PangoCairo  # noqa: E402
 
 SYS = "/usr/share/hud"
+sys.path.insert(0, SYS)
+from hudshapes import tri_bars, tri_size  # noqa: E402
 USER = os.path.join(os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")), "hud")
 CATEGORIES = ["all", "internet", "media", "graphics", "office", "develop", "games", "system"]
-SHAPES = ["round", "cut", "tab", "hex", "slant", "pill", "bracket", "hexagon"]
+SHAPES = ["round", "cut", "tab", "bar", "hex", "slant", "pill", "bracket", "tri", "hexagon"]
 
 
 def settings():
@@ -54,7 +56,8 @@ def run(command):
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
-def load_icon(name, size=44):
+def load_icon(name, size=None):
+    size = size or (44 if V.get("shape_cell", "tri") == "hexagon" else 34)
     theme = Gtk.IconTheme.get_default()
     for candidate in (name, (name or "").lower(), "application-x-executable"):
         if not candidate:
@@ -70,10 +73,16 @@ def load_icon(name, size=44):
 
 
 class HexGrid(Gtk.DrawingArea):
-    """A honeycomb of tiles. Each item is a dict with name, icon, state."""
+    """A grid of shaped cells. Each item is a dict with name, icon, state.
 
-    R = 64          # corner radius of one cell
+    With shape_cell = tri the cells are three-bar tiles that alternate
+    pointing up and down so they lock together; the level bar carries the
+    name and the opening holds the icon. With hexagon they form a honeycomb.
+    """
+
+    R = 64          # hexagon: centre to corner
     GAP = 10
+    TRI = (46, 22, 65)   # tri: opening size, bar thickness, corner distance
 
     def __init__(self, on_activate):
         super().__init__()
@@ -94,6 +103,25 @@ class HexGrid(Gtk.DrawingArea):
 
     def layout(self):
         width = max(self.get_allocated_width(), 300)
+        self.tri = V.get("shape_cell", "tri") != "hexagon"
+        if self.tri:
+            r, t, d = self.TRI
+            w, h = tri_size(r, t, d)
+            inner = r / 2 + t
+            # Neighbours point opposite ways; this spacing keeps their
+            # slanted sides parallel and GAP apart.
+            pitch = (2 * inner + self.GAP + (inner - d) / 2) * 2 / math.sqrt(3)
+            cols = max(1, int((width - 40 - w) // pitch) + 1)
+            self.centres, self.ups = [], []
+            for i in range(len(self.items)):
+                row, col = divmod(i, cols)
+                up = (row + col) % 2 == 0
+                top = 16 + row * (h + self.GAP)
+                self.centres.append((20 + w / 2 + col * pitch, top + (d if up else inner)))
+                self.ups.append(up)
+            rows = (len(self.items) + cols - 1) // cols
+            self.set_size_request(-1, int(32 + rows * (h + self.GAP)))
+            return
         w = math.sqrt(3) * self.R + self.GAP
         cols = max(1, int((width - w / 2 - 20) // w))
         self.centres = []
@@ -106,10 +134,13 @@ class HexGrid(Gtk.DrawingArea):
         self.set_size_request(-1, int(32 + 2 * self.R + max(0, rows - 1) * (1.5 * self.R + self.GAP)))
 
     def hit(self, x, y):
+        reach = (self.TRI[2] * 0.8 if self.tri else self.R * 0.86) ** 2
+        best, best_d = -1, reach
         for i, (cx, cy) in enumerate(self.centres):
-            if (x - cx) ** 2 + (y - cy) ** 2 < (self.R * 0.86) ** 2:
-                return i
-        return -1
+            dist = (x - cx) ** 2 + (y - cy) ** 2
+            if dist < best_d:
+                best, best_d = i, dist
+        return best
 
     def set_hover(self, i):
         if i != self.hover:
@@ -137,10 +168,17 @@ class HexGrid(Gtk.DrawingArea):
             if i == self.hover or i == self.selected:
                 colour = rgb("warn")
             cr.new_path()
-            for k in range(6):
-                a = math.radians(30 + 60 * k)
-                cr.line_to(cx + self.R * math.cos(a), cy + self.R * math.sin(a))
-            cr.close_path()
+            if self.tri:
+                for bar in tri_bars(cx, cy, *self.TRI, gap=5, up=self.ups[i]):
+                    cr.move_to(*bar[0])
+                    for point in bar[1:]:
+                        cr.line_to(*point)
+                    cr.close_path()
+            else:
+                for k in range(6):
+                    a = math.radians(30 + 60 * k)
+                    cr.line_to(cx + self.R * math.cos(a), cy + self.R * math.sin(a))
+                cr.close_path()
             cr.set_source_rgba(*rgb("panel", "#0b0b24"), 0.9)
             cr.fill_preserve()
             if i == self.hover:
@@ -157,6 +195,19 @@ class HexGrid(Gtk.DrawingArea):
             cr.stroke()
 
             icon = item.get("icon")
+            if self.tri:
+                r, t, _d = self.TRI
+                turn = 1 if self.ups[i] else -1
+                mid = cy + turn * 4                    # middle of the opening
+                plate = cy + turn * (r / 2 + t / 2)    # middle of the level bar
+                if icon:
+                    Gdk.cairo_set_source_pixbuf(cr, icon, cx - icon.get_width() / 2,
+                                                mid - icon.get_height() / 2)
+                    cr.paint()
+                else:
+                    self.text(cr, item["name"][:1].upper(), cx, mid - 17, colour, 20, 40)
+                self.text(cr, item["name"].upper(), cx, plate - 6, colour, 7.5, r * 1.85)
+                continue
             if icon:
                 Gdk.cairo_set_source_pixbuf(cr, icon, cx - icon.get_width() / 2, cy - 36)
                 cr.paint()
@@ -439,6 +490,7 @@ class Center(Gtk.Window):
                           ("shape_prefs", "Preference blocks"), ("shape_clock", "Clock"),
                           ("shape_dock", "Dock tiles"), ("shape_button", "Buttons in apps")):
             choice(f, text, key, SHAPES)
+        choice(f, "App cells and folders", "shape_cell", ["tri", "hexagon"])
 
         f = section("FRAMES")
         number(f, "Line thickness", "border_width", 1, 5)

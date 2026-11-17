@@ -30,6 +30,8 @@ import subprocess
 import sys
 
 SYS = "/usr/share/hud"
+sys.path.insert(0, SYS)
+from hudshapes import tri_bars, tri_size  # noqa: E402
 HOME = os.path.expanduser("~")
 USER = os.path.join(os.environ.get("XDG_CONFIG_HOME", HOME + "/.config"), "hud")
 SETTINGS = os.path.join(USER, "settings.conf")
@@ -126,6 +128,15 @@ def derive(v):
         v["height_" + ctx] = block
     v["height_dock"] = "46"
     v["tile_w_dock"], v["tile_h_dock"] = "84", "74"
+    # Open windows in the dock use the same tile with the icon in its middle.
+    v["shape_dockicon"] = v.get("shape_dock", "tri")
+    v["height_dockicon"] = v["height_dock"]
+    v["tile_w_dockicon"], v["tile_h_dockicon"] = v["tile_w_dock"], v["tile_h_dock"]
+    tri = v["shape_dockicon"] == "tri"
+    icon = 24 if tri else int(v.get("dock_icon_size", "30"))
+    tile_w = int(tri_size(*TRI)[0]) + 2 * (2 + int(v["glow_px"]) // 3) if tri else 84
+    v["dock_icon_px"] = str(icon)
+    v["dock_icon_margin"] = str(max(0, (tile_w - icon) // 2 - 3))
     v["current_theme"] = v["theme"].upper()
 
     # Dock: turn "LABEL:command" entries into waybar custom modules.
@@ -152,7 +163,9 @@ def derive(v):
 # ---------------------------------------------------------------- shapes
 # Frames are small SVG pictures drawn in the theme colours and stretched by
 # the toolkit, which is how blocks get shapes plain CSS cannot make.
-SHAPES = ("round", "cut", "tab", "hex", "slant", "pill", "bracket", "hexagon")
+SHAPES = ("round", "cut", "tab", "bar", "hex", "slant", "pill", "bracket", "tri", "hexagon")
+# The tri tile used in the dock: opening size, bar thickness, corner distance.
+TRI = (34, 18, 50)
 
 
 def shape_points(shape, x0, y0, x1, y1, c):
@@ -169,6 +182,10 @@ def shape_points(shape, x0, y0, x1, y1, c):
     if shape == "hexagon":
         e = (x1 - x0) / 4
         return [(x0 + e, y0), (x1 - e, y0), (x1, cy), (x1 - e, y1), (x0 + e, y1), (x0, cy)]
+    if shape == "bar":
+        # One bar of the tri tile: a shallow facet above, a steep one below.
+        a, b = h * 0.5, h * 0.17
+        return [(x0 + a, y0), (x1 - a, y0), (x1, cy), (x1 - b, y1), (x0 + b, y1), (x0, cy)]
     if shape == "slant":
         e = h * 0.42
         return [(x0 + e, y0), (x1, y0), (x1 - e, y1), (x0, y1)]
@@ -183,7 +200,10 @@ def shape_svg(shape, w, h, colour, fill, fill_opacity, stroke, glow, radius):
     pts = shape_points(shape, x0, y0, x1, y1, c)
     style = (f'fill="{fill}" fill-opacity="{fill_opacity}" stroke="{colour}" '
              f'stroke-width="{stroke}" stroke-linejoin="round"')
-    if pts:
+    if shape == "tri":
+        body = "".join('<path d="M' + "L".join(f"{x:.1f},{y:.1f}" for x, y in bar) + f'Z" {style}/>'
+                       for bar in tri_bars(w / 2, g + TRI[2], *TRI))
+    elif pts:
         body = '<path d="M' + "L".join(f"{x:.1f},{y:.1f}" for x, y in pts) + f'Z" {style}/>'
     elif shape == "bracket":
         k = c + 3
@@ -229,15 +249,23 @@ def frame_css(v, ctx, colour_key, filled):
     name = f"{ctx}-{colour_key}{'-fill' if filled else ''}.svg"
     path = os.path.join(folder, name)
 
-    if shape == "hexagon" and "tile_w_" + ctx in v:
+    if shape in ("hexagon", "tri") and "tile_w_" + ctx in v:
         w, h = int(v["tile_w_" + ctx]), int(v["tile_h_" + ctx])
+        push = 0
+        if shape == "tri":
+            # Text sits in the level bar; an icon sits in the opening.
+            r, t, d = TRI
+            tw, th = tri_size(r, t, d)
+            w, h = int(tw) + 2 * g, int(th) + 2 * g
+            target = g + d + 3 if ctx.endswith("icon") else g + d + r / 2 + t / 2
+            push = int(round(2 * (target - h / 2)))
         svg = shape_svg(shape, w, h, colour, fill, opacity, stroke, glow, radius)
         css = (f'background: url("{path}") center / {w}px {h}px no-repeat; border: none; '
-               f'min-width: {w}px; min-height: {h}px; padding: 0;')
+               f'min-width: {w}px; min-height: {h - push}px; padding: {push}px 0 0 0;')
     elif height:
-        if shape == "hexagon":
-            shape = "hex"
-        edge = int(height / 2) + 2 if shape in ("hex", "slant", "pill") else int(radius) + g + 2
+        if shape in ("hexagon", "tri"):
+            shape = "bar"
+        edge = int(height / 2) + 2 if shape in ("bar", "hex", "slant", "pill") else int(radius) + g + 2
         w = edge * 2 + 12
         svg = shape_svg(shape, w, height, colour, fill, opacity, stroke, glow, radius)
         # The ends come from the picture's left and right slices; the
@@ -253,7 +281,7 @@ def frame_css(v, ctx, colour_key, filled):
                f'border-image: url("{path}") 0 {edge} / 0 {edge}px stretch; '
                f'min-height: {height}px; padding: 0 {inner}px;')
     else:
-        if shape in ("hex", "slant", "pill", "hexagon"):
+        if shape in ("bar", "hex", "slant", "pill", "hexagon", "tri"):
             shape = "cut"
         edge = int(min(radius, 8)) + g + 1
         w = edge * 3

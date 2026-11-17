@@ -7,7 +7,7 @@
   {{dock_pins}}
   "wlr/taskbar": {
     "format": "{icon}",
-    "icon-size": {{dock_icon_size}},
+    "icon-size": {{dock_icon_px}},
     "icon-theme": "{{icon_theme}}",
     "tooltip-format": "{title}",
     "on-click": "activate",

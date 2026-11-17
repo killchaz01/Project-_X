@@ -3,7 +3,7 @@
 A Linux desktop operating system laid out like macOS (menu bar on top, dock
 at the bottom, Command-key shortcuts) with a retro-futurist "orbital
 tracking" look, where every part of the look and layout is a setting you can
-change. Version 0.3, "First Light".
+change. Version 0.4, "First Light".
 
 "Apsis OS" is a working name. It is set in one place, `config/version`.
 
@@ -69,8 +69,9 @@ and `hudctl set bar_prefs ...`; more are listed in
 
 Open it from the APPS tile in the dock, Cmd+A, or the system menu.
 
-- **Apps**: every installed app as a honeycomb. Click one to start it; type
-  to filter.
+- **Apps**: every installed app as a grid of interlocking three-bar tiles,
+  with the name on the level bar and the icon in the opening. Click one to
+  start it; type to filter.
 - **Catalogue**: about 45 common apps by category. Blue cells can be
   installed, green ones are installed. Pick one and press Install; a
   terminal opens, asks for your password and shows the download. To add
@@ -88,16 +89,21 @@ one tool, `hudctl`, and plain text settings, which you can also use directly.
 
 ### Shapes
 
+The signature shape is `tri`: three bars set around a triangular opening.
+Dock tiles, Application Center cells and folder icons use it; text blocks in
+the menu bar use `bar`, which is one of those three bars on its own.
+
 Each group of blocks has its own outline, chosen from `round`, `cut`, `tab`,
-`hex`, `slant`, `pill`, `bracket` and `hexagon`:
+`bar`, `hex`, `slant`, `pill`, `bracket`, `tri` and `hexagon`:
 
 ```sh
-hudctl set shape_dock pill        # dock tiles
+hudctl set shape_dock hexagon     # dock tiles (default: tri)
 hudctl set shape_hardware slant   # hardware read-outs
 hudctl set shape_prefs tab        # preference blocks
 hudctl set shape_menu hex         # the system menu button
 hudctl set shape_clock cut
 hudctl set shape_button round     # buttons inside apps
+hudctl set shape_cell hexagon     # app cells and folders (tri or hexagon)
 ```
 
 Frames everywhere follow three settings: `border_width` (line thickness),
@@ -173,7 +179,7 @@ workflow. Download `os-iso-arm64` or `os-iso-amd64` from the run's Artifacts.
 sudo apt install debootstrap squashfs-tools xorriso mtools dosfstools \
                  grub-common grub-pc-bin grub-efi-amd64-bin   # on a PC
 cd os
-sudo ./build.sh          # result: out/apsis-0.3-amd64.iso (about 1.8 GB)
+sudo ./build.sh          # result: out/apsis-0.4-amd64.iso (about 1.8 GB)
 ```
 
 It builds for the kind of machine you run it on. To build the ARM image on a
@@ -215,8 +221,8 @@ On a real machine, write the ISO to a USB stick (this erases the stick), then
 boot from it. On an Intel Mac hold Option while powering on.
 
 ```sh
-sudo dd if=out/apsis-0.3-amd64.iso of=/dev/sdX bs=4M status=progress   # Linux
-sudo dd if=out/apsis-0.3-amd64.iso of=/dev/rdiskN bs=4m                # macOS
+sudo dd if=out/apsis-0.4-amd64.iso of=/dev/sdX bs=4M status=progress   # Linux
+sudo dd if=out/apsis-0.4-amd64.iso of=/dev/rdiskN bs=4m                # macOS
 ```
 
 The live session logs in by itself as `live` (password `live`) and starts
@@ -248,7 +254,7 @@ desktop starts.
 
 Then run `sudo ./build.sh clean && sudo ./build.sh`.
 
-## Limits of 0.3
+## Limits of 0.4
 
 - On Apple Silicon it runs in a virtual machine only. Booting those Macs
   directly needs the Asahi Linux boot chain and drivers, which this does
