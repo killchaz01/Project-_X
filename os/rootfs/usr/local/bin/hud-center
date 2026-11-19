@@ -25,7 +25,7 @@ from gi.repository import Gdk, GdkPixbuf, Gio, GLib, Gtk, Pango, PangoCairo  # n
 
 SYS = "/usr/share/hud"
 sys.path.insert(0, SYS)
-from hudshapes import tri_bars, tri_size  # noqa: E402
+from hudshapes import block_faces, block_geometry, tri_blocks  # noqa: E402
 USER = os.path.join(os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")), "hud")
 CATEGORIES = ["all", "internet", "media", "graphics", "office", "develop", "games", "system"]
 SHAPES = ["round", "cut", "tab", "bar", "hex", "slant", "pill", "bracket", "tri", "hexagon"]
@@ -57,7 +57,7 @@ def run(command):
 
 
 def load_icon(name, size=None):
-    size = size or (44 if V.get("shape_cell", "tri") == "hexagon" else 20)
+    size = size or (44 if V.get("shape_cell", "tri") == "hexagon" else 18)
     theme = Gtk.IconTheme.get_default()
     for candidate in (name, (name or "").lower(), "application-x-executable"):
         if not candidate:
@@ -75,14 +75,15 @@ def load_icon(name, size=None):
 class HexGrid(Gtk.DrawingArea):
     """A grid of shaped cells. Each item is a dict with name, icon, state.
 
-    With shape_cell = tri the cells are three-bar tiles that alternate
-    pointing up and down so they lock together; the level bar carries the
-    name and the opening holds the icon. With hexagon they form a honeycomb.
+    With shape_cell = tri each cell is three solid 3-D beams around a
+    triangular opening that holds the icon; cells alternate pointing up and
+    down so they lock together, and names sit on a line under each row. With hexagon they form a honeycomb.
     """
 
     R = 64          # hexagon: centre to corner
     GAP = 10
-    TRI = (30, 14, 42)   # tri: opening size, bar thickness, corner distance
+    TRI = (26, 11, 3)    # tri: opening size, beam thickness, gap between beams
+    DEPTH = 6.5          # tri: how far the beams reach back
     LABEL = 16           # tri: room under each row for the titles
 
     def __init__(self, on_activate):
@@ -106,23 +107,28 @@ class HexGrid(Gtk.DrawingArea):
         width = max(self.get_allocated_width(), 300)
         self.tri = V.get("shape_cell", "tri") != "hexagon"
         if self.tri:
-            r, t, d = self.TRI
-            w, h = tri_size(r, t, d)
-            inner = r / 2 + t
-            # Neighbours point opposite ways; this spacing keeps their
-            # slanted sides parallel and GAP apart.
-            pitch = (2 * inner + self.GAP + 4 + (inner - d) / 2) * 2 / math.sqrt(3)
-            cols = max(1, int((width - 40 - w) // pitch) + 1)
+            r, t, gap = self.TRI
+            ci, co, y_top, _foot, y_bar, half = block_geometry(r, t, gap)
+            self.ex, self.ey = self.DEPTH * math.sqrt(3) / 2, -self.DEPTH / 2
+            bottom = y_bar + t                     # lowest point of an up cell
+            h = bottom - y_top                     # height of the front faces
+            w = 2 * half
+            dy = y_top + bottom                    # a down cell sits this much lower
+            # Neighbours point opposite ways; this keeps the slanted outer
+            # faces parallel and GAP apart, counting the depth between them.
+            pitch = (2 * co + self.DEPTH + self.GAP + dy / 2) * 2 / math.sqrt(3)
+            cols = max(1, int((width - 40 - w - self.ex) // pitch) + 1)
+            row_h = h - self.ey + self.LABEL + self.GAP
             self.centres, self.ups = [], []
             for i in range(len(self.items)):
                 row, col = divmod(i, cols)
                 up = (row + col) % 2 == 0
-                top = 16 + row * (h + self.LABEL + self.GAP)
-                self.centres.append((20 + w / 2 + col * pitch, top + (d if up else inner)))
+                top = 16 - self.ey + row * row_h    # top of this row's front faces
+                self.centres.append((20 + half + col * pitch, top - y_top + (0 if up else dy)))
                 self.ups.append(up)
             rows = (len(self.items) + cols - 1) // cols
-            self.pitch, self.cell_h = pitch, h
-            self.set_size_request(-1, int(32 + rows * (h + self.LABEL + self.GAP)))
+            self.pitch, self.cell_h, self.row_bottom = pitch, h, bottom
+            self.set_size_request(-1, int(32 + rows * row_h))
             return
         w = math.sqrt(3) * self.R + self.GAP
         cols = max(1, int((width - w / 2 - 20) // w))
@@ -136,7 +142,7 @@ class HexGrid(Gtk.DrawingArea):
         self.set_size_request(-1, int(32 + 2 * self.R + max(0, rows - 1) * (1.5 * self.R + self.GAP)))
 
     def hit(self, x, y):
-        reach = (self.TRI[2] * 0.8 if self.tri else self.R * 0.86) ** 2
+        reach = ((self.TRI[0] + self.TRI[1]) if self.tri else self.R * 0.86) ** 2
         best, best_d = -1, reach
         for i, (cx, cy) in enumerate(self.centres):
             dist = (x - cx) ** 2 + (y - cy) ** 2
@@ -169,41 +175,31 @@ class HexGrid(Gtk.DrawingArea):
                 colour = rgb("cyan")
             if i == self.hover or i == self.selected:
                 colour = rgb("warn")
-            cr.new_path()
             if self.tri:
-                for bar in tri_bars(cx, cy, *self.TRI, gap=5, up=self.ups[i]):
-                    cr.move_to(*bar[0])
-                    for point in bar[1:]:
-                        cr.line_to(*point)
-                    cr.close_path()
+                self.draw_blocks(cr, cx, cy, self.ups[i], colour, i == self.hover, stroke, glow)
             else:
+                cr.new_path()
                 for k in range(6):
                     a = math.radians(30 + 60 * k)
                     cr.line_to(cx + self.R * math.cos(a), cy + self.R * math.sin(a))
                 cr.close_path()
-            if self.tri:
-                # Solid bars; the opening between them stays see-through.
-                cr.set_source_rgba(*colour, 1)
-            else:
                 cr.set_source_rgba(*rgb("panel", "#0b0b24"), 0.9)
-            cr.fill_preserve()
-            if i == self.hover and not self.tri:
-                cr.set_source_rgba(*colour, 0.16)
                 cr.fill_preserve()
-            cr.set_line_join(1)
-            for extra, alpha in ((glow, 0.07), (glow * 0.6, 0.12), (glow * 0.3, 0.22)):
-                if glow:
-                    cr.set_source_rgba(*colour, alpha)
-                    cr.set_line_width(stroke + extra)
-                    cr.stroke_preserve()
-            cr.set_source_rgba(*colour, 1)
-            cr.set_line_width(stroke)
-            cr.stroke()
+                if i == self.hover:
+                    cr.set_source_rgba(*colour, 0.16)
+                    cr.fill_preserve()
+                cr.set_line_join(1)
+                for extra, alpha in ((glow, 0.07), (glow * 0.6, 0.12), (glow * 0.3, 0.22)):
+                    if glow:
+                        cr.set_source_rgba(*colour, alpha)
+                        cr.set_line_width(stroke + extra)
+                        cr.stroke_preserve()
+                cr.set_source_rgba(*colour, 1)
+                cr.set_line_width(stroke)
+                cr.stroke()
 
             icon = item.get("icon")
             if self.tri:
-                r, t, d = self.TRI
-                inner = r / 2 + t
                 if icon:
                     Gdk.cairo_set_source_pixbuf(cr, icon, cx - icon.get_width() / 2,
                                                 cy - icon.get_height() / 2)
@@ -211,8 +207,8 @@ class HexGrid(Gtk.DrawingArea):
                 else:
                     self.text(cr, item["name"][:1].upper(), cx, cy - 10, colour, 11, 24)
                 # Titles share one line under the row, whichever way the cell points.
-                bottom = cy + (inner if self.ups[i] else d)
-                self.text(cr, item["name"].upper(), cx, bottom + 3, colour, 7, self.pitch - 4)
+                bottom = cy + (self.row_bottom if self.ups[i] else self.TRI[0] + self.TRI[1] * 0.15)
+                self.text(cr, item["name"].upper(), cx, bottom + 4, colour, 7, self.pitch - 4)
                 continue
             if icon:
                 Gdk.cairo_set_source_pixbuf(cr, icon, cx - icon.get_width() / 2, cy - 36)
@@ -220,6 +216,39 @@ class HexGrid(Gtk.DrawingArea):
             else:
                 self.text(cr, item["name"][:1].upper(), cx, cy - 38, colour, 26, 60)
             self.text(cr, item["name"].upper(), cx, cy + 14, colour, 8.5, self.R * 1.45)
+
+    def draw_blocks(self, cr, cx, cy, up, colour, hover, stroke, glow):
+        """Three solid beams with lit tops, shaded sides and dark edge lines."""
+        faces = block_faces(tri_blocks(cx, cy, *self.TRI, up=up), self.ex, self.ey)
+        bg = rgb("bg", "#07071a")
+
+        def path(points):
+            cr.new_path()
+            cr.move_to(*points[0])
+            for point in points[1:]:
+                cr.line_to(*point)
+            cr.close_path()
+
+        def mix(a, b, k):
+            return tuple(x * (1 - k) + y * k for x, y in zip(a, b))
+
+        cr.set_line_join(1)
+        if glow:                                   # soft light around the whole mark
+            for extra, alpha in ((glow, 0.05), (glow * 0.5, 0.09)):
+                cr.set_source_rgba(*colour, alpha)
+                cr.set_line_width(stroke + extra)
+                for _kind, points in faces:
+                    path(points)
+                    cr.stroke()
+        tones = {"front": colour, "top": mix(colour, (1, 1, 1), 0.45 if not hover else 0.6),
+                 "side": mix(colour, bg, 0.62)}
+        for kind, points in faces:
+            path(points)
+            cr.set_source_rgba(*tones[kind], 1)
+            cr.fill_preserve()
+            cr.set_source_rgba(*bg, 0.85)
+            cr.set_line_width(1.1)
+            cr.stroke()
 
     def text(self, cr, string, cx, y, colour, size, width):
         layout = PangoCairo.create_layout(cr)

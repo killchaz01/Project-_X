@@ -69,8 +69,9 @@ and `hudctl set bar_prefs ...`; more are listed in
 
 Open it from the APPS tile in the dock, Cmd+A, or the system menu.
 
-- **Apps**: every installed app as a grid of interlocking three-bar tiles:
-  solid bars, the icon in the opening, the name underneath. Click one to
+- **Apps**: every installed app as a grid of interlocking cells, each three
+  solid 3-D beams around a triangular opening that holds the icon, with the
+  name underneath. Click one to
   start it; type to filter.
 - **Catalogue**: about 45 common apps by category. Blue cells can be
   installed, green ones are installed. Pick one and press Install; a
