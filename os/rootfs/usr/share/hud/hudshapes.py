@@ -40,39 +40,42 @@ def tri_size(r, t, d):
 S3 = math.sqrt(3)
 
 
-def block_geometry(r, t, gap):
-    """Numbers shared by tri_blocks and the code that lays the blocks out.
+def tri_blocks(cx, cy, r, t, gap=2.5, up=True):
+    """Front faces of the three beams of the 3-D tri mark.
 
-    The opening is an equilateral triangle with corners r from its centre.
-    Each side of it gets a straight beam t thick, gap away from it; the two
-    slanted beams stand on the level one and end in square cuts side by
-    side at the top.
+    The opening is an equilateral triangle with corners r from its centre;
+    each beam is t thick and gap away from it. As in the reference sketch,
+    the two slanted beams end in square cuts side by side at the top; the
+    right one stands on the level beam, which runs out to its outer edge;
+    the left one runs down past the level beam's left end, which stops
+    short against it.
+
+    Returns (faces, opening centre). The mark is centred on cx across;
+    with up=False it is flipped top to bottom.
     """
     ci = r / 2 + gap / 2                 # centre to a beam's inner face
     co = ci + t                          # centre to a beam's outer face
-    y_top = -(r + t * 0.15)              # where the slanted beams are cut
-    y_foot = r / 2 - gap / 2             # where they stand
+    y_top = -(r + t * 0.2)               # where the slanted beams are cut
     y_bar = r / 2 + gap / 2              # top of the level beam
-    half = (2 * co + y_foot) / S3        # half the level beam's length
-    return ci, co, y_top, y_foot, y_bar, half
+    y_low = y_bar + t                    # bottom of the level beam
+    y_foot = y_bar - gap                 # where the right beam stands
 
-
-def tri_blocks(cx, cy, r, t, gap=3, up=True):
-    """Front faces of the three beams of the 3-D tri mark, as point lists.
-
-    With up=False the mark is flipped top to bottom (the level beam on top).
-    """
-    ci, co, y_top, y_foot, y_bar, half = block_geometry(r, t, gap)
-
-    def on(c, y):                        # x where the left-side line c meets height y
+    def on(c, y):                        # x on the left-side line c at height y
         return -(2 * c + y) / S3
 
-    left = [(on(co, y_top), y_top), (-gap / 2, y_top), (-gap / 2, -2 * ci + S3 * gap / 2),
-            (on(ci, y_foot), y_foot), (on(co, y_foot), y_foot)]
-    right = [(-x, y) for x, y in reversed(left)]
-    level = [(-half, y_bar), (half, y_bar), (half, y_bar + t), (-half, y_bar + t)]
+    apex = -2 * ci + S3 * gap / 2        # inner faces meet the centre line here
+    left = [(on(co, y_top), y_top), (-gap / 2, y_top), (-gap / 2, apex),
+            (on(ci, y_low), y_low), (on(co, y_low), y_low)]
+    right = [(-on(co, y_top), y_top), (-on(co, y_foot), y_foot), (-on(ci, y_foot), y_foot),
+             (gap / 2, apex), (gap / 2, y_top)]
+    level = [(on(ci - gap, y_bar), y_bar), (-on(co, y_foot), y_bar),
+             (-on(co, y_foot), y_low), (on(ci - gap, y_low), y_low)]
+    polys = [left, right, level]
+    xs = [x for poly in polys for x, _ in poly]
+    shift = -(min(xs) + max(xs)) / 2
     flip = 1 if up else -1
-    return [[(cx + x, cy + flip * y) for x, y in poly] for poly in (left, right, level)]
+    faces = [[(cx + shift + x, cy + flip * y) for x, y in poly] for poly in polys]
+    return faces, (cx + shift, cy)
 
 
 def block_faces(polys, ex, ey):
