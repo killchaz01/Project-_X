@@ -99,3 +99,49 @@ def block_faces(polys, ex, ey):
                 backs.append((kind, [(x0, y0), (x1, y1), (x1 + ex, y1 + ey), (x0 + ex, y0 + ey)]))
         fronts.append(("front", poly))
     return backs + fronts
+
+
+# ------------------------------------------------------------ split hexagon
+def _clip(poly, f):
+    """Keep the part of a polygon where the linear function f(x, y) >= 0."""
+    out = []
+    for i, p in enumerate(poly):
+        q = poly[(i + 1) % len(poly)]
+        fp, fq = f(*p), f(*q)
+        if fp >= 0:
+            out.append(p)
+        if (fp >= 0) != (fq >= 0):
+            k = fp / (fp - fq)
+            out.append((p[0] + (q[0] - p[0]) * k, p[1] + (q[1] - p[1]) * k))
+    return out
+
+
+def split_hex(cx, top, w, gap=0.045):
+    """A flat-topped hexagon split into three pieces round a flask-shaped
+    opening: a narrow slot down from the top that widens into a triangle.
+
+    Returns (pieces, opening centre). Each piece is a list of
+    (x, y, round) where round is True at the hexagon's own corners, which
+    are drawn with a larger radius. Sizes are fractions of the width w.
+    """
+    hexagon = [(-0.25, 0), (0.25, 0), (0.5, 0.433), (0.25, 0.866), (-0.25, 0.866), (-0.5, 0.433)]
+    slot, shoulder = 0.097, 0.329            # half-width and depth of the top slot
+    base_y = 0.598                           # top of the bottom piece
+
+    def inner(x, y, m):
+        """Distance outside the line running down-left at 60 degrees from
+        the foot of the slot, which is the side piece's inner edge."""
+        return -0.5 * (y - shoulder) - 0.866 * (x * m + slot)
+
+    left = _clip(_clip(hexagon, lambda x, y: -slot - x), lambda x, y: inner(x, y, 1))
+    right = [(-x, y) for x, y in reversed(left)]
+    bottom = _clip(hexagon, lambda x, y: y - base_y)
+    for m in (1, -1):
+        bottom = _clip(bottom, lambda x, y, m=m: -inner(x, y, m) - gap)
+
+    corners = {(round(x, 3), round(y, 3)) for x, y in hexagon}
+    pieces = []
+    for poly in (left, right, bottom):
+        pieces.append([(cx + x * w, top + y * w, (round(x, 3), round(y, 3)) in corners)
+                       for x, y in poly])
+    return pieces, (cx, top + 0.49 * w)

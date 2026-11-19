@@ -25,7 +25,7 @@ from gi.repository import Gdk, GdkPixbuf, Gio, GLib, Gtk, Pango, PangoCairo  # n
 
 SYS = "/usr/share/hud"
 sys.path.insert(0, SYS)
-from hudshapes import block_faces, tri_blocks  # noqa: E402
+from hudshapes import block_faces, split_hex, tri_blocks  # noqa: E402
 USER = os.path.join(os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")), "hud")
 CATEGORIES = ["all", "internet", "media", "graphics", "office", "develop", "games", "system"]
 SHAPES = ["round", "cut", "tab", "bar", "hex", "slant", "pill", "bracket", "tri", "hexagon"]
@@ -57,7 +57,7 @@ def run(command):
 
 
 def load_icon(name, size=None):
-    size = size or (44 if V.get("shape_cell", "tri") == "hexagon" else 14)
+    size = size or {"hexagon": 44, "tri": 14}.get(V.get("shape_cell", "split"), 12)
     theme = Gtk.IconTheme.get_default()
     for candidate in (name, (name or "").lower(), "application-x-executable"):
         if not candidate:
@@ -75,6 +75,10 @@ def load_icon(name, size=None):
 class HexGrid(Gtk.DrawingArea):
     """A grid of shaped cells. Each item is a dict with name, icon, state.
 
+    With shape_cell = split (the default) each cell is a hexagon cut into
+    three rounded pieces round a flask-shaped opening that holds the icon,
+    set out in offset rows with names underneath.
+
     With shape_cell = tri each cell is three 3-D beams, drawn in outline,
     around a triangular opening that holds the icon; cells alternate pointing up and
     down so they lock together, and names sit on a line under each row. With hexagon they form a honeycomb.
@@ -84,7 +88,8 @@ class HexGrid(Gtk.DrawingArea):
     GAP = 10
     TRI = (22, 7, 2.5)   # tri: opening size, beam thickness, gap between beams
     DEPTH = 7            # tri: how far the beams reach back
-    LABEL = 16           # tri: room under each row for the titles
+    LABEL = 16           # tri, split: room under each row for the titles
+    SPLIT_W = 58         # split: width of one hexagon
 
     def __init__(self, on_activate):
         super().__init__()
@@ -105,7 +110,23 @@ class HexGrid(Gtk.DrawingArea):
 
     def layout(self):
         width = max(self.get_allocated_width(), 300)
-        self.tri = V.get("shape_cell", "tri") != "hexagon"
+        mode = V.get("shape_cell", "split")
+        self.split, self.tri = mode == "split", mode == "tri"
+        if self.split:
+            w = self.SPLIT_W
+            h = w * 0.866
+            pitch = w + 14
+            cols = max(1, int((width - 40 - w - pitch / 2) // pitch) + 1)
+            row_h = h + self.LABEL + self.GAP + 4
+            self.centres = []
+            for i in range(len(self.items)):
+                row, col = divmod(i, cols)
+                shift = pitch / 2 if row % 2 else 0      # every other row sits half a cell over
+                self.centres.append((20 + w / 2 + shift + col * pitch, 16 + row * row_h + h / 2))
+            rows = (len(self.items) + cols - 1) // cols
+            self.pitch, self.cell_h = pitch, h
+            self.set_size_request(-1, int(32 + rows * row_h))
+            return
         if self.tri:
             self.ex, self.ey = self.DEPTH * math.sqrt(3) / 2, -self.DEPTH / 2
 
@@ -155,7 +176,10 @@ class HexGrid(Gtk.DrawingArea):
         self.set_size_request(-1, int(32 + 2 * self.R + max(0, rows - 1) * (1.5 * self.R + self.GAP)))
 
     def hit(self, x, y):
-        reach = ((self.TRI[0] + self.TRI[1]) if self.tri else self.R * 0.86) ** 2
+        if self.split:
+            reach = (self.SPLIT_W * 0.5) ** 2
+        else:
+            reach = ((self.TRI[0] + self.TRI[1]) if self.tri else self.R * 0.86) ** 2
         best, best_d = -1, reach
         for i, (cx, cy) in enumerate(self.centres):
             dist = (x - cx) ** 2 + (y - cy) ** 2
@@ -188,6 +212,19 @@ class HexGrid(Gtk.DrawingArea):
                 colour = rgb("cyan")
             if i == self.hover or i == self.selected:
                 colour = rgb("warn")
+            if self.split:
+                self.draw_split(cr, cx, cy, colour, glow)
+                icon = item.get("icon")
+                ox, oy = split_hex(cx, cy - self.cell_h / 2, self.SPLIT_W)[1]
+                if icon:
+                    Gdk.cairo_set_source_pixbuf(cr, icon, ox - icon.get_width() / 2,
+                                                oy - icon.get_height() / 2)
+                    cr.paint()
+                else:
+                    self.text(cr, item["name"][:1].upper(), ox, oy - 7, colour, 7.5, 18)
+                self.text(cr, item["name"].upper(), cx, cy + self.cell_h / 2 + 4, colour, 7,
+                          self.pitch - 4)
+                continue
             if self.tri:
                 self.draw_blocks(cr, cx, cy, self.ups[i], colour, i == self.hover, stroke, glow)
             else:
@@ -231,6 +268,44 @@ class HexGrid(Gtk.DrawingArea):
             else:
                 self.text(cr, item["name"][:1].upper(), cx, cy - 38, colour, 26, 60)
             self.text(cr, item["name"].upper(), cx, cy + 14, colour, 8.5, self.R * 1.45)
+
+    def draw_split(self, cr, cx, cy, colour, glow):
+        """The split hexagon: three solid rounded pieces with a soft glow."""
+        w = self.SPLIT_W
+        pieces = split_hex(cx, cy - w * 0.433, w)[0]
+        big, small = w * 0.07, w * 0.03
+
+        def path(points):
+            # Each corner is cut back along both edges and joined by a curve
+            # through the corner, so the pieces get soft, even rounding.
+            n = len(points)
+            cr.new_path()
+            for k in range(n):
+                x0, y0, _ = points[k - 1]
+                x1, y1, rounded = points[k]
+                x2, y2, _ = points[(k + 1) % n]
+                la, lb = math.hypot(x0 - x1, y0 - y1), math.hypot(x2 - x1, y2 - y1)
+                d = min(big if rounded else small, la * 0.45, lb * 0.45)
+                ax, ay = x1 + (x0 - x1) * d / la, y1 + (y0 - y1) * d / la
+                bx, by = x1 + (x2 - x1) * d / lb, y1 + (y2 - y1) * d / lb
+                if k == 0:
+                    cr.move_to(ax, ay)
+                else:
+                    cr.line_to(ax, ay)
+                cr.curve_to(x1, y1, x1, y1, bx, by)
+            cr.close_path()
+
+        if glow:
+            for extra, alpha in ((glow, 0.06), (glow * 0.5, 0.12)):
+                cr.set_source_rgba(*colour, alpha)
+                cr.set_line_width(extra)
+                for piece in pieces:
+                    path(piece)
+                    cr.stroke()
+        cr.set_source_rgba(*colour, 1)
+        for piece in pieces:
+            path(piece)
+            cr.fill()
 
     def draw_blocks(self, cr, cx, cy, up, colour, hover, stroke, glow):
         """Three 3-D beams in outline: coloured edges on dark faces.
@@ -540,7 +615,7 @@ class Center(Gtk.Window):
                           ("shape_prefs", "Preference blocks"), ("shape_clock", "Clock"),
                           ("shape_dock", "Dock tiles"), ("shape_button", "Buttons in apps")):
             choice(f, text, key, SHAPES)
-        choice(f, "App cells and folders", "shape_cell", ["tri", "hexagon"])
+        choice(f, "App cells", "shape_cell", ["split", "tri", "hexagon"])
 
         f = section("FRAMES")
         number(f, "Line thickness", "border_width", 1, 5)

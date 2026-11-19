@@ -69,8 +69,8 @@ and `hudctl set bar_prefs ...`; more are listed in
 
 Open it from the APPS tile in the dock, Cmd+A, or the system menu.
 
-- **Apps**: every installed app as a grid of interlocking cells, each a
-  line drawing of three 3-D beams around a triangular opening that holds
+- **Apps**: every installed app as offset rows of cells, each a hexagon
+  split into three rounded pieces around a flask-shaped opening that holds
   the icon, with the name underneath. Click one to
   start it; type to filter.
 - **Catalogue**: about 45 common apps by category. Blue cells can be
@@ -104,7 +104,7 @@ hudctl set shape_prefs tab        # preference blocks
 hudctl set shape_menu hex         # the system menu button
 hudctl set shape_clock cut
 hudctl set shape_button round     # buttons inside apps
-hudctl set shape_cell hexagon     # app cells and folders (tri or hexagon)
+hudctl set shape_cell tri         # app cells: split (default), tri or hexagon
 ```
 
 Frames everywhere follow three settings: `border_width` (line thickness),
