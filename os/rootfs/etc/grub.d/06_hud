@@ -1,0 +1,7 @@
+#!/bin/sh
+# Boot menu colours.
+cat <<'CFG'
+set color_normal=yellow/black
+set menu_color_normal=yellow/black
+set menu_color_highlight=black/light-green
+CFG

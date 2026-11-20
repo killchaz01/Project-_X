@@ -1,0 +1,98 @@
+#!/usr/bin/env python3
+"""hud-icons - draw folder and file icons in the active theme's colours.
+
+Writes a small icon set called HUD to ~/.local/share/icons/HUD. It only
+holds folders, the trash and plain files; every other icon comes from the
+set named by the "icon_base" setting.
+"""
+import json
+import os
+import sys
+
+sys.path.insert(0, "/usr/share/hud")
+from hudshapes import tri_bars  # noqa: E402
+
+USER = os.path.join(os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")), "hud")
+OUT = os.path.join(os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share")), "icons", "HUD")
+
+with open(os.path.join(USER, "resolved.json")) as f:
+    v = json.load(f)
+sw = max(2.5, float(v.get("border_width", "2")) + 1)
+
+
+def svg(body):
+    return ('<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">'
+            '<filter id="g" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur '
+            'stdDeviation="1.6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode '
+            f'in="SourceGraphic"/></feMerge></filter><g filter="url(#g)">{body}</g></svg>')
+
+
+def folder(code, colour):
+    """The folder mark with a short code on it: three bars, or a hexagon."""
+    if v.get("shape_cell", "tri") != "hexagon":
+        body = "".join('<path d="M' + "L".join(f"{x:.1f},{y:.1f}" for x, y in bar) + f'Z" '
+                       f'fill="{v["panel"]}" fill-opacity="0.9" stroke="{colour}" stroke-width="{sw - 0.5}" '
+                       f'stroke-linejoin="round"/>' for bar in tri_bars(32, 36, 20, 12, 31, gap=3))
+        if code:
+            body += (f'<text x="32" y="55.5" text-anchor="middle" font-family="{v["font_ui"]}, sans-serif" '
+                     f'font-weight="bold" font-size="9" letter-spacing="0.5" fill="{colour}">{code}</text>')
+        return svg(body)
+    body = (f'<path d="M18 9H32L36 14H46L60 34L46 56H18L4 34Z" fill="{v["panel"]}" fill-opacity="0.9" '
+            f'stroke="{colour}" stroke-width="{sw}" stroke-linejoin="round"/>'
+            f'<path d="M14 22H50" stroke="{colour}" stroke-width="2" opacity="0.6"/>')
+    if code:
+        body += (f'<text x="32" y="44" text-anchor="middle" font-family="{v["font_ui"]}, sans-serif" '
+                 f'font-weight="bold" font-size="15" letter-spacing="1" fill="{colour}">{code}</text>')
+    return svg(body)
+
+
+def sheet(colour):
+    """A page with one corner cut, for plain files."""
+    return svg(f'<path d="M14 6H40L52 18V58H14Z" fill="{v["panel"]}" fill-opacity="0.9" stroke="{colour}" '
+               f'stroke-width="{sw}" stroke-linejoin="round"/>'
+               f'<path d="M40 6V18H52" fill="none" stroke="{colour}" stroke-width="2"/>'
+               f'<path d="M21 30H45M21 38H45M21 46H37" stroke="{colour}" stroke-width="2.5" opacity="0.8"/>')
+
+
+places = {
+    "folder": "", "folder-open": "", "inode-directory": "", "folder-templates": "TPL",
+    "folder-publicshare": "PUB", "user-home": "HOME", "user-desktop": "DESK",
+    "folder-documents": "DOC", "folder-download": "DL", "folder-downloads": "DL",
+    "folder-music": "MUS", "folder-pictures": "PIC", "folder-videos": "VID",
+}
+files = {"places": {}, "mimetypes": {}}
+for name, code in places.items():
+    files["places"][name] = folder(code, v["title"] if code == "HOME" else v["line"])
+files["places"]["user-trash"] = folder("BIN", v["muted"])
+files["places"]["user-trash-full"] = folder("BIN", v["alert"])
+for name in ("text-x-generic", "text-plain", "unknown", "application-octet-stream"):
+    files["mimetypes"][name] = sheet(v["cyan"])
+
+for context, icons in files.items():
+    folder_path = os.path.join(OUT, "scalable", context)
+    os.makedirs(folder_path, exist_ok=True)
+    for name, text in icons.items():
+        with open(os.path.join(folder_path, name + ".svg"), "w") as f:
+            f.write(text)
+
+with open(os.path.join(OUT, "index.theme"), "w") as f:
+    f.write(f"""[Icon Theme]
+Name=HUD
+Comment=Folders and files in the theme colours
+Inherits={v.get("icon_base", "Papirus-Dark")},hicolor
+Directories=scalable/places,scalable/mimetypes
+
+[scalable/places]
+Size=64
+MinSize=16
+MaxSize=512
+Type=Scalable
+Context=Places
+
+[scalable/mimetypes]
+Size=64
+MinSize=16
+MaxSize=512
+Type=Scalable
+Context=MimeTypes
+""")

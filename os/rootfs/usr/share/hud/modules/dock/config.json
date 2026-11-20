@@ -1,0 +1,16 @@
+{
+  "layer": "top",
+  "position": "{{dock_position}}",
+  "spacing": 0,
+  "margin": "0 0 4 0",
+  "modules-center": {{dock_modules}},
+  {{dock_pins}}
+  "wlr/taskbar": {
+    "format": "{icon}",
+    "icon-size": {{dock_icon_px}},
+    "icon-theme": "{{icon_theme}}",
+    "tooltip-format": "{title}",
+    "on-click": "activate",
+    "on-click-middle": "close"
+  }
+}

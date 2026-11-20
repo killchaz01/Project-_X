@@ -1,0 +1,33 @@
+/* Written by hudctl from the active theme. */
+* {
+  font-family: "{{font_ui}}", sans-serif;
+  font-size: {{font_size}}pt;
+  font-weight: bold;
+  min-height: 0;
+  border: none;
+  box-shadow: none;
+}
+window#waybar { background: transparent; }
+tooltip {
+  background: {{panel}}; border: {{border_width}}px solid {{title}}; border-radius: {{radius}}px;
+}
+tooltip label { color: {{title}}; }
+
+/* Pinned launchers: one framed tile each. */
+.modules-center .module {
+  margin: 0 3px;
+  color: {{alert}};
+  font-size: {{dock_label_size}}pt;
+  letter-spacing: 1px;
+  text-shadow: 0 0 {{glow_px}}px alpha({{alert}}, 0.9), 0 0 {{glow_wide}}px alpha({{alert}}, 0.5);
+  {{frame_dock_alert}}
+}
+.modules-center .module:hover { color: {{warn}}; {{frame_dock_alert_fill}} }
+
+/* Open windows. */
+#taskbar { background: none; border: none; padding: 0; margin: 0 0 0 10px; min-width: 0; }
+#taskbar:hover { background: none; border: none; }
+#taskbar button { margin: 0 1px; {{frame_dockicon_line}} }
+#taskbar button box { margin: 0 0 0 {{dock_icon_margin}}px; }
+#taskbar button:hover { {{frame_dockicon_warn}} }
+#taskbar button.active { {{frame_dockicon_title}} }

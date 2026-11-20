@@ -79,3 +79,7 @@ docs/                       App Store listing draft and privacy policy
 - Payments via StoreKit, once the pricing model is chosen.
 - Medicine reminders, one-tap family calling and a daily "I'm OK" check-in were built and then removed to keep the first release focused. They remain in the git history (commit `1074e09` and the one after it) and could return as a separate companion app.
 - The app name **EverStrong** is a placeholder. Check that it is available in App Store Connect and isn't someone else's trademark.
+
+---
+
+This repository also holds **Apsis OS** (working name), a separate Linux desktop operating system project. See [os/](os/README.md).

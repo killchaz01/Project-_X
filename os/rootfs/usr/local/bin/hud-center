@@ -1,0 +1,686 @@
+#!/usr/bin/env python3
+"""hud-center - Application Center and Control Center.
+
+  hud-center apps      open on the installed apps (click one to start it)
+  hud-center catalog   open on the catalogue of apps you can install
+  hud-center prefs     open on the preferences
+
+Apps are drawn as interlocking tiles. Preferences are a front end to hudctl:
+every control here runs "hudctl set KEY VALUE".
+"""
+import json
+import math
+import os
+import shlex
+import subprocess
+import sys
+
+import gi
+gi.require_version("Gtk", "3.0")
+gi.require_version("Gdk", "3.0")
+gi.require_version("GdkPixbuf", "2.0")
+gi.require_version("Pango", "1.0")
+gi.require_version("PangoCairo", "1.0")
+from gi.repository import Gdk, GdkPixbuf, Gio, GLib, Gtk, Pango, PangoCairo  # noqa: E402
+
+SYS = "/usr/share/hud"
+sys.path.insert(0, SYS)
+from hudshapes import block_faces, split_hex, tri_blocks  # noqa: E402
+USER = os.path.join(os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")), "hud")
+CATEGORIES = ["all", "internet", "media", "graphics", "office", "develop", "games", "system"]
+SHAPES = ["round", "cut", "tab", "bar", "hex", "slant", "pill", "bracket", "tri", "hexagon"]
+
+
+def settings():
+    try:
+        with open(os.path.join(USER, "resolved.json")) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+V = settings()
+
+
+def rgb(key, fallback="#ff9a1f"):
+    h = V.get(key, fallback).lstrip("#")
+    return tuple(int(h[i:i + 2], 16) / 255 for i in (0, 2, 4))
+
+
+def hudctl(*args):
+    subprocess.Popen(["hudctl", *args], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def run(command):
+    subprocess.Popen(command, shell=True, start_new_session=True,
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def load_icon(name, size=None):
+    size = size or {"hexagon": 44, "tri": 14}.get(V.get("shape_cell", "split"), 12)
+    theme = Gtk.IconTheme.get_default()
+    for candidate in (name, (name or "").lower(), "application-x-executable"):
+        if not candidate:
+            continue
+        try:
+            if os.path.isabs(candidate):
+                return GdkPixbuf.Pixbuf.new_from_file_at_size(candidate, size, size)
+            if theme.has_icon(candidate):
+                return theme.load_icon(candidate, size, Gtk.IconLookupFlags.FORCE_SIZE)
+        except GLib.Error:
+            pass
+    return None
+
+
+class HexGrid(Gtk.DrawingArea):
+    """A grid of shaped cells. Each item is a dict with name, icon, state.
+
+    With shape_cell = split (the default) each cell is a hexagon cut into
+    three rounded pieces round a flask-shaped opening that holds the icon,
+    set out in offset rows with names underneath.
+
+    With shape_cell = tri each cell is three 3-D beams, drawn in outline,
+    around a triangular opening that holds the icon; cells alternate pointing up and
+    down so they lock together, and names sit on a line under each row. With hexagon they form a honeycomb.
+    """
+
+    R = 64          # hexagon: centre to corner
+    GAP = 10
+    TRI = (22, 7, 2.5)   # tri: opening size, beam thickness, gap between beams
+    DEPTH = 7            # tri: how far the beams reach back
+    LABEL = 16           # tri, split: room under each row for the titles
+    SPLIT_W = 58         # split: width of one hexagon
+
+    def __init__(self, on_activate):
+        super().__init__()
+        self.items, self.centres, self.hover, self.selected = [], [], -1, -1
+        self.on_activate = on_activate
+        self.add_events(Gdk.EventMask.POINTER_MOTION_MASK | Gdk.EventMask.BUTTON_RELEASE_MASK |
+                        Gdk.EventMask.LEAVE_NOTIFY_MASK)
+        self.connect("draw", self.draw)
+        self.connect("motion-notify-event", self.motion)
+        self.connect("leave-notify-event", lambda *_: self.set_hover(-1))
+        self.connect("button-release-event", self.click)
+        self.connect("size-allocate", lambda *_: self.layout())
+
+    def set_items(self, items):
+        self.items, self.hover, self.selected = items, -1, -1
+        self.layout()
+        self.queue_draw()
+
+    def layout(self):
+        width = max(self.get_allocated_width(), 300)
+        mode = V.get("shape_cell", "split")
+        self.split, self.tri = mode == "split", mode == "tri"
+        if self.split:
+            w = self.SPLIT_W
+            h = w * 0.866
+            pitch = w + 14
+            cols = max(1, int((width - 40 - w - pitch / 2) // pitch) + 1)
+            row_h = h + self.LABEL + self.GAP + 4
+            self.centres = []
+            for i in range(len(self.items)):
+                row, col = divmod(i, cols)
+                shift = pitch / 2 if row % 2 else 0      # every other row sits half a cell over
+                self.centres.append((20 + w / 2 + shift + col * pitch, 16 + row * row_h + h / 2))
+            rows = (len(self.items) + cols - 1) // cols
+            self.pitch, self.cell_h = pitch, h
+            self.set_size_request(-1, int(32 + rows * row_h))
+            return
+        if self.tri:
+            self.ex, self.ey = self.DEPTH * math.sqrt(3) / 2, -self.DEPTH / 2
+
+            def points(cx, cy, up, deep):
+                faces, _ = tri_blocks(cx, cy, *self.TRI, up=up)
+                pts = [p for face in faces for p in face]
+                return pts + [(x + self.ex, y + self.ey) for x, y in pts] if deep else pts
+
+            front = points(0, 0, True, False)
+            y_min, y_max = min(y for _, y in front), max(y for _, y in front)
+            h, w = y_max - y_min, max(x for x, _ in front) - min(x for x, _ in front)
+            dy = y_min + y_max                     # a down cell sits this much lower
+            # Neighbours point opposite ways. Find the spacing that leaves
+            # GAP between their parallel slanted faces, depth included.
+            s3 = math.sqrt(3)
+            n1, n2 = (s3 / 2, -0.5), (s3 / 2, 0.5)
+
+            def along(n, pts):
+                return [n[0] * x + n[1] * y for x, y in pts]
+            p1 = (self.GAP + max(along(n1, points(0, 0, True, True))) -
+                  min(along(n1, points(0, dy, False, False)))) / (s3 / 2)
+            p2 = (self.GAP + max(along(n2, points(0, dy, False, True))) -
+                  min(along(n2, points(0, 0, True, False)))) / (s3 / 2)
+            pitch = max(p1, p2)
+            cols = max(1, int((width - 40 - w - self.ex) // pitch) + 1)
+            row_h = h - self.ey + self.LABEL + self.GAP
+            self.centres, self.ups = [], []
+            for i in range(len(self.items)):
+                row, col = divmod(i, cols)
+                up = (row + col) % 2 == 0
+                top = 16 - self.ey + row * row_h    # top of this row's front faces
+                self.centres.append((20 + w / 2 + col * pitch, top - y_min + (0 if up else dy)))
+                self.ups.append(up)
+            rows = (len(self.items) + cols - 1) // cols
+            self.pitch, self.cell_h, self.y_min = pitch, h, y_min
+            self.set_size_request(-1, int(32 + rows * row_h))
+            return
+        w = math.sqrt(3) * self.R + self.GAP
+        cols = max(1, int((width - w / 2 - 20) // w))
+        self.centres = []
+        for i in range(len(self.items)):
+            row, col = divmod(i, cols)
+            x = 20 + w / 2 + col * w + (w / 2 if row % 2 else 0)
+            y = 16 + self.R + row * (1.5 * self.R + self.GAP)
+            self.centres.append((x, y))
+        rows = (len(self.items) + cols - 1) // cols
+        self.set_size_request(-1, int(32 + 2 * self.R + max(0, rows - 1) * (1.5 * self.R + self.GAP)))
+
+    def hit(self, x, y):
+        if self.split:
+            reach = (self.SPLIT_W * 0.5) ** 2
+        else:
+            reach = ((self.TRI[0] + self.TRI[1]) if self.tri else self.R * 0.86) ** 2
+        best, best_d = -1, reach
+        for i, (cx, cy) in enumerate(self.centres):
+            dist = (x - cx) ** 2 + (y - cy) ** 2
+            if dist < best_d:
+                best, best_d = i, dist
+        return best
+
+    def set_hover(self, i):
+        if i != self.hover:
+            self.hover = i
+            self.queue_draw()
+
+    def motion(self, _w, event):
+        self.set_hover(self.hit(event.x, event.y))
+
+    def click(self, _w, event):
+        i = self.hit(event.x, event.y)
+        if i >= 0:
+            self.selected = i
+            self.queue_draw()
+            self.on_activate(self.items[i])
+
+    def draw(self, _w, cr):
+        stroke = float(V.get("border_width", 2))
+        glow = int(V.get("glow_px", 9))
+        for i, item in enumerate(self.items):
+            cx, cy = self.centres[i]
+            colour = rgb("title") if item.get("state") == "installed" else rgb("line")
+            if item.get("state") == "available":
+                colour = rgb("cyan")
+            if i == self.hover or i == self.selected:
+                colour = rgb("warn")
+            if self.split:
+                self.draw_split(cr, cx, cy, colour, glow)
+                icon = item.get("icon")
+                ox, oy = split_hex(cx, cy - self.cell_h / 2, self.SPLIT_W)[1]
+                if icon:
+                    Gdk.cairo_set_source_pixbuf(cr, icon, ox - icon.get_width() / 2,
+                                                oy - icon.get_height() / 2)
+                    cr.paint()
+                else:
+                    self.text(cr, item["name"][:1].upper(), ox, oy - 7, colour, 7.5, 18)
+                self.text(cr, item["name"].upper(), cx, cy + self.cell_h / 2 + 4, colour, 7,
+                          self.pitch - 4)
+                continue
+            if self.tri:
+                self.draw_blocks(cr, cx, cy, self.ups[i], colour, i == self.hover, stroke, glow)
+            else:
+                cr.new_path()
+                for k in range(6):
+                    a = math.radians(30 + 60 * k)
+                    cr.line_to(cx + self.R * math.cos(a), cy + self.R * math.sin(a))
+                cr.close_path()
+                cr.set_source_rgba(*rgb("panel", "#0b0b24"), 0.9)
+                cr.fill_preserve()
+                if i == self.hover:
+                    cr.set_source_rgba(*colour, 0.16)
+                    cr.fill_preserve()
+                cr.set_line_join(1)
+                for extra, alpha in ((glow, 0.07), (glow * 0.6, 0.12), (glow * 0.3, 0.22)):
+                    if glow:
+                        cr.set_source_rgba(*colour, alpha)
+                        cr.set_line_width(stroke + extra)
+                        cr.stroke_preserve()
+                cr.set_source_rgba(*colour, 1)
+                cr.set_line_width(stroke)
+                cr.stroke()
+
+            icon = item.get("icon")
+            if self.tri:
+                ox, oy = tri_blocks(cx, cy, *self.TRI, up=self.ups[i])[1]
+                if icon:
+                    Gdk.cairo_set_source_pixbuf(cr, icon, ox - icon.get_width() / 2,
+                                                oy - icon.get_height() / 2)
+                    cr.paint()
+                else:
+                    self.text(cr, item["name"][:1].upper(), ox, oy - 8, colour, 8.5, 20)
+                # Titles share one line under the row, whichever way the cell points.
+                top = cy + (self.y_min if self.ups[i] else -(self.y_min + self.cell_h))
+                bottom = top + self.cell_h
+                self.text(cr, item["name"].upper(), cx, bottom + 4, colour, 7, self.pitch - 4)
+                continue
+            if icon:
+                Gdk.cairo_set_source_pixbuf(cr, icon, cx - icon.get_width() / 2, cy - 36)
+                cr.paint()
+            else:
+                self.text(cr, item["name"][:1].upper(), cx, cy - 38, colour, 26, 60)
+            self.text(cr, item["name"].upper(), cx, cy + 14, colour, 8.5, self.R * 1.45)
+
+    def draw_split(self, cr, cx, cy, colour, glow):
+        """The split hexagon: three solid rounded pieces with a soft glow."""
+        w = self.SPLIT_W
+        pieces = split_hex(cx, cy - w * 0.433, w)[0]
+        big, small = w * 0.07, w * 0.03
+
+        def path(points):
+            # Each corner is cut back along both edges and joined by a curve
+            # through the corner, so the pieces get soft, even rounding.
+            n = len(points)
+            cr.new_path()
+            for k in range(n):
+                x0, y0, _ = points[k - 1]
+                x1, y1, rounded = points[k]
+                x2, y2, _ = points[(k + 1) % n]
+                la, lb = math.hypot(x0 - x1, y0 - y1), math.hypot(x2 - x1, y2 - y1)
+                d = min(big if rounded else small, la * 0.45, lb * 0.45)
+                ax, ay = x1 + (x0 - x1) * d / la, y1 + (y0 - y1) * d / la
+                bx, by = x1 + (x2 - x1) * d / lb, y1 + (y2 - y1) * d / lb
+                if k == 0:
+                    cr.move_to(ax, ay)
+                else:
+                    cr.line_to(ax, ay)
+                cr.curve_to(x1, y1, x1, y1, bx, by)
+            cr.close_path()
+
+        if glow:
+            for extra, alpha in ((glow, 0.06), (glow * 0.5, 0.12)):
+                cr.set_source_rgba(*colour, alpha)
+                cr.set_line_width(extra)
+                for piece in pieces:
+                    path(piece)
+                    cr.stroke()
+        cr.set_source_rgba(*colour, 1)
+        for piece in pieces:
+            path(piece)
+            cr.fill()
+
+    def draw_blocks(self, cr, cx, cy, up, colour, hover, stroke, glow):
+        """Three 3-D beams in outline: coloured edges on dark faces.
+
+        The faces are filled with the panel colour only so that edges
+        behind them stay hidden, as in a line drawing.
+        """
+        faces = block_faces(tri_blocks(cx, cy, *self.TRI, up=up)[0], self.ex, self.ey)
+        panel = rgb("panel", "#0b0b24")
+
+        def path(points):
+            cr.new_path()
+            cr.move_to(*points[0])
+            for point in points[1:]:
+                cr.line_to(*point)
+            cr.close_path()
+
+        cr.set_line_join(1)
+        if glow:                                   # soft light around the edges
+            for extra, alpha in ((glow * 0.7, 0.06), (glow * 0.35, 0.12)):
+                cr.set_source_rgba(*colour, alpha)
+                cr.set_line_width(1.5 + extra)
+                for _kind, points in faces:
+                    path(points)
+                    cr.stroke()
+        line = 1.9 if hover else 1.4
+        for _kind, points in faces:
+            path(points)
+            cr.set_source_rgba(*panel, 1)
+            cr.fill_preserve()
+            cr.set_source_rgba(*colour, 1)
+            cr.set_line_width(line)
+            cr.stroke()
+
+    def text(self, cr, string, cx, y, colour, size, width):
+        layout = PangoCairo.create_layout(cr)
+        layout.set_font_description(Pango.FontDescription(f"{V.get('font_ui', 'Sans')} Bold {size}"))
+        layout.set_width(int(width * Pango.SCALE))
+        layout.set_alignment(Pango.Alignment.CENTER)
+        layout.set_ellipsize(Pango.EllipsizeMode.END)
+        layout.set_text(string, -1)
+        cr.set_source_rgba(*colour, 1)
+        cr.move_to(cx - width / 2, y)
+        PangoCairo.show_layout(cr, layout)
+
+
+def read_catalog():
+    entries = []
+    for path in (os.path.join(SYS, "catalog.conf"), os.path.join(USER, "catalog.conf")):
+        try:
+            with open(path) as f:
+                for line in f:
+                    parts = [p.strip() for p in line.split("|")]
+                    if len(parts) == 5 and not line.startswith("#"):
+                        entries.append(dict(zip(("name", "package", "category", "icon_name", "about"), parts)))
+        except OSError:
+            pass
+    return entries
+
+
+def installed_packages(packages):
+    if not packages:
+        return set()
+    out = subprocess.run(["dpkg-query", "-W", "-f=${Package}\t${db:Status-Status}\n", *packages],
+                         capture_output=True, text=True).stdout
+    return {line.split("\t")[0] for line in out.splitlines() if line.endswith("\tinstalled")}
+
+
+class Center(Gtk.Window):
+    def __init__(self, page):
+        super().__init__(title="Application Center")
+        self.set_default_size(980, 680)
+        self.query, self.category, self.pick = "", "all", None
+
+        root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        self.add(root)
+
+        top = Gtk.Box(spacing=8, margin=12)
+        root.pack_start(top, False, False, 0)
+        self.tabs = {}
+        for key, label in (("apps", "APPS"), ("catalog", "CATALOGUE"), ("prefs", "PREFERENCES")):
+            b = Gtk.ToggleButton(label=label)
+            b.connect("clicked", self.tab_clicked, key)
+            top.pack_start(b, False, False, 0)
+            self.tabs[key] = b
+        self.search = Gtk.SearchEntry(placeholder_text="Search")
+        self.search.connect("search-changed", self.search_changed)
+        top.pack_end(self.search, False, False, 0)
+
+        self.stack = Gtk.Stack()
+        root.pack_start(self.stack, True, True, 0)
+
+        self.apps_grid = HexGrid(self.launch)
+        self.stack.add_named(self.scrolled(self.apps_grid), "apps")
+        self.stack.add_named(self.build_catalog(), "catalog")
+        self.stack.add_named(self.scrolled(self.build_prefs()), "prefs")
+
+        self.connect("key-press-event", self.key)
+        self.connect("destroy", Gtk.main_quit)
+        self.show_all()
+        self.show_page(page)
+
+    @staticmethod
+    def scrolled(child):
+        s = Gtk.ScrolledWindow()
+        s.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        s.add(child)
+        return s
+
+    # ------------------------------------------------------------ pages
+    def tab_clicked(self, button, key):
+        if button.get_active():
+            self.show_page(key)
+        elif self.stack.get_visible_child_name() == key:
+            button.set_active(True)
+
+    def show_page(self, key):
+        self.stack.set_visible_child_name(key)
+        for name, b in self.tabs.items():
+            b.handler_block_by_func(self.tab_clicked)
+            b.set_active(name == key)
+            b.handler_unblock_by_func(self.tab_clicked)
+        self.set_title("Control Center" if key == "prefs" else "Application Center")
+        self.search.set_sensitive(key != "prefs")
+        self.refresh()
+
+    def search_changed(self, entry):
+        self.query = entry.get_text().strip().lower()
+        self.refresh()
+
+    def key(self, _w, event):
+        if event.keyval == Gdk.KEY_Escape:
+            self.close()
+
+    def refresh(self):
+        page = self.stack.get_visible_child_name()
+        if page == "apps":
+            items = []
+            for app in sorted(Gio.AppInfo.get_all(), key=lambda a: a.get_display_name().lower()):
+                if not app.should_show():
+                    continue
+                name = app.get_display_name()
+                if self.query and self.query not in name.lower():
+                    continue
+                icon = app.get_icon()
+                items.append({"name": name, "icon": load_icon(icon.to_string() if icon else None),
+                              "state": "installed", "app": app})
+            self.apps_grid.set_items(items)
+        elif page == "catalog":
+            catalog = read_catalog()
+            have = installed_packages([e["package"] for e in catalog])
+            items = []
+            for e in catalog:
+                if self.category != "all" and e["category"] != self.category:
+                    continue
+                if self.query and self.query not in (e["name"] + e["about"]).lower():
+                    continue
+                e["state"] = "installed" if e["package"] in have else "available"
+                e["icon"] = load_icon(e["icon_name"]) if e["state"] == "installed" else None
+                items.append(e)
+            self.catalog_grid.set_items(items)
+            self.select(None)
+
+    def launch(self, item):
+        item["app"].launch([], None)
+        self.close()
+
+    # ---------------------------------------------------------- catalogue
+    def build_catalog(self):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        row = Gtk.Box(spacing=6, margin_start=12, margin_end=12, margin_bottom=6)
+        box.pack_start(row, False, False, 0)
+        group = None
+        for cat in CATEGORIES:
+            b = Gtk.RadioButton.new_with_label_from_widget(group, cat.upper())
+            b.set_mode(False)
+            group = group or b
+            b.connect("toggled", self.category_changed, cat)
+            row.pack_start(b, False, False, 0)
+        self.catalog_grid = HexGrid(self.select)
+        box.pack_start(self.scrolled(self.catalog_grid), True, True, 0)
+
+        bar = Gtk.Box(spacing=12, margin=12)
+        box.pack_start(bar, False, False, 0)
+        self.detail = Gtk.Label(xalign=0)
+        self.detail.set_line_wrap(True)
+        bar.pack_start(self.detail, True, True, 0)
+        self.open_button = Gtk.Button(label="OPEN")
+        self.open_button.connect("clicked", lambda _b: run(f"gtk-launch {shlex.quote(self.pick['icon_name'])} "
+                                                           f"|| {shlex.quote(self.pick['package'])}"))
+        self.action = Gtk.Button(label="INSTALL")
+        self.action.get_style_context().add_class("suggested-action")
+        self.action.connect("clicked", self.install_or_remove)
+        bar.pack_end(self.action, False, False, 0)
+        bar.pack_end(self.open_button, False, False, 0)
+        return box
+
+    def category_changed(self, button, cat):
+        if button.get_active():
+            self.category = cat
+            self.refresh()
+
+    def select(self, item):
+        self.pick = item
+        if not item:
+            self.detail.set_markup("Pick an app. <b>Green</b> tiles are installed, "
+                                   "<b>blue</b> ones can be installed.")
+            self.action.hide()
+            self.open_button.hide()
+            return
+        have = item["state"] == "installed"
+        self.detail.set_markup(f"<b>{GLib.markup_escape_text(item['name'])}</b>   "
+                               f"{GLib.markup_escape_text(item['about'])}\n"
+                               f"<small>package: {item['package']}</small>")
+        self.action.set_label("REMOVE" if have else "INSTALL")
+        self.action.show()
+        self.open_button.set_visible(have)
+
+    def install_or_remove(self, _button):
+        item = self.pick
+        pkg = shlex.quote(item["package"])
+        if item["state"] == "installed":
+            title, script = f"Removing {item['name']}", f"sudo apt-get remove -y {pkg}"
+        else:
+            title = f"Installing {item['name']}"
+            script = f"sudo apt-get update && sudo apt-get install -y {pkg}"
+        script += '; echo; echo "Finished. Press Enter to close."; read _'
+        terminal = V.get("terminal", "foot")
+        pid = subprocess.Popen([terminal, "-T", title, "-e", "sh", "-c", script]).pid
+        GLib.child_watch_add(GLib.PRIORITY_DEFAULT, pid, lambda *_: self.refresh())
+
+    # --------------------------------------------------------- preferences
+    def build_prefs(self):
+        self.pending = {}
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6, margin=16)
+
+        def section(title):
+            label = Gtk.Label(xalign=0)
+            label.set_markup(f"<b>{title}</b>")
+            label.get_style_context().add_class("hud-section")
+            box.pack_start(label, False, False, 6)
+            flow = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE, column_spacing=14, row_spacing=6,
+                               max_children_per_line=4, min_children_per_line=2, homogeneous=True)
+            box.pack_start(flow, False, False, 0)
+            return flow
+
+        def row(flow, text, widget):
+            r = Gtk.Box(spacing=8)
+            r.pack_start(Gtk.Label(label=text, xalign=0), True, True, 0)
+            r.pack_end(widget, False, False, 0)
+            flow.add(r)
+
+        def choice(flow, text, key, options):
+            combo = Gtk.ComboBoxText()
+            for o in options:
+                combo.append_text(o)
+            if V.get(key) in options:
+                combo.set_active(options.index(V.get(key)))
+            combo.connect("changed", lambda c: hudctl("set", key, c.get_active_text()))
+            row(flow, text, combo)
+
+        def number(flow, text, key, low, high):
+            spin = Gtk.SpinButton.new_with_range(low, high, 1)
+            spin.set_value(float(V.get(key, low) or low))
+            spin.connect("value-changed", lambda s: self.later(key, str(int(s.get_value()))))
+            row(flow, text, spin)
+
+        def toggle(flow, text, key):
+            sw = Gtk.Switch(active=V.get(key) == "yes", valign=Gtk.Align.CENTER)
+            sw.connect("notify::active", lambda s, _p: hudctl("set", key, "yes" if s.get_active() else "no"))
+            row(flow, text, sw)
+
+        def colour(flow, text, key):
+            c = Gdk.RGBA()
+            c.parse(V.get(key, "#000000"))
+            button = Gtk.ColorButton(rgba=c)
+            button.connect("color-set", lambda b: hudctl("set", key, "#%02x%02x%02x" % tuple(
+                int(round(x * 255)) for x in (b.get_rgba().red, b.get_rgba().green, b.get_rgba().blue))))
+            row(flow, text, button)
+
+        def launcher(flow, text, command):
+            b = Gtk.Button(label=text)
+            b.connect("clicked", lambda _b: run(command))
+            flow.add(b)
+
+        term = V.get("terminal", "foot")
+        f = section("SYSTEM")
+        launcher(f, "NETWORK", f"{term} -e nmtui")
+        launcher(f, "SOUND", "pavucontrol")
+        launcher(f, "BLUETOOTH", "blueman-manager")
+        launcher(f, "DISPLAYS", "wdisplays")
+        launcher(f, "UPDATE SYSTEM", f"{term} -e sh -c 'sudo apt-get update && sudo apt-get full-upgrade; "
+                                     "echo; echo Finished. Press Enter.; read _'")
+        launcher(f, "ABOUT", f"{term} -H hud")
+
+        f = section("THEME")
+        themes = subprocess.run(["hudctl", "theme"], capture_output=True, text=True).stdout.split("\n")
+        for line in themes:
+            name = line[2:].split(" ")[0] if len(line) > 2 else ""
+            if name:
+                b = Gtk.Button(label=name.upper())
+                b.connect("clicked", lambda _b, n=name: hudctl("theme", n))
+                f.add(b)
+
+        f = section("SHAPES")
+        for key, text in (("shape_menu", "Menu button"), ("shape_hardware", "Hardware read-outs"),
+                          ("shape_prefs", "Preference blocks"), ("shape_clock", "Clock"),
+                          ("shape_dock", "Dock tiles"), ("shape_button", "Buttons in apps")):
+            choice(f, text, key, SHAPES)
+        choice(f, "App cells", "shape_cell", ["split", "tri", "hexagon"])
+
+        f = section("FRAMES")
+        number(f, "Line thickness", "border_width", 1, 5)
+        number(f, "Corner size", "radius", 0, 24)
+        number(f, "Glow strength", "glow_strength", 0, 3)
+        toggle(f, "Glow", "glow")
+        toggle(f, "Scan lines", "scanlines")
+        toggle(f, "Window halo", "window_shadows")
+        number(f, "Text size", "font_size", 8, 18)
+
+        f = section("LAYOUT")
+        choice(f, "Menu bar", "bar_position", ["top", "bottom"])
+        choice(f, "Dock", "dock_position", ["bottom", "left", "right"])
+        choice(f, "Window buttons", "window_buttons", ["left", "right"])
+        number(f, "Bar height", "bar_height", 28, 56)
+        number(f, "Gap around windows", "gap", 0, 30)
+        toggle(f, "Natural scrolling", "natural_scroll")
+        toggle(f, "Tap to click", "tap_to_click")
+
+        f = section("COLOURS")
+        for key, text in (("bg", "Background"), ("panel", "Panels"), ("text", "Text"), ("line", "Lines"),
+                          ("title", "Titles"), ("cyan", "Read-outs"), ("warn", "Highlights"),
+                          ("alert", "Alerts"), ("muted", "Dim text")):
+            colour(f, text, key)
+
+        f = section("MODULES")
+        out = subprocess.run(["hudctl", "module"], capture_output=True, text=True).stdout
+        for line in out.splitlines():
+            state, name = line[:3].strip(), line[4:].split(" ")[0]
+            if name and name != "windows":
+                sw = Gtk.Switch(active=state == "on", valign=Gtk.Align.CENTER)
+                sw.connect("notify::active", lambda s, _p, n=name: hudctl(
+                    "module", "on" if s.get_active() else "off", n))
+                row(f, name.capitalize(), sw)
+
+        note = Gtk.Label(xalign=0, margin_top=10)
+        note.set_markup("<small>Changes apply at once. Open windows pick up new colours when "
+                        "reopened. Everything here can also be set with <tt>hudctl</tt>.</small>")
+        box.pack_start(note, False, False, 0)
+        return box
+
+    def later(self, key, value):
+        """Wait until a number stops changing before applying it."""
+        if key in self.pending:
+            GLib.source_remove(self.pending[key])
+
+        def fire():
+            del self.pending[key]
+            hudctl("set", key, value)
+            return False
+        self.pending[key] = GLib.timeout_add(500, fire)
+
+
+def main():
+    page = sys.argv[1] if len(sys.argv) > 1 else "apps"
+    if page not in ("apps", "catalog", "prefs"):
+        print(__doc__.strip())
+        sys.exit(1)
+    css = Gtk.CssProvider()
+    css.load_from_data(b".hud-section { letter-spacing: 3px; margin-top: 10px; }")
+    Gtk.StyleContext.add_provider_for_screen(Gdk.Screen.get_default(), css,
+                                             Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+    Center(page)
+    Gtk.main()
+
+
+if __name__ == "__main__":
+    main()

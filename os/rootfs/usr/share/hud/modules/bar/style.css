@@ -1,0 +1,78 @@
+/* Written by hudctl from the active theme. */
+* {
+  font-family: "{{font_ui}}", sans-serif;
+  font-size: {{font_size}}pt;
+  font-weight: bold;
+  min-height: 0;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+window#waybar {
+  background: alpha({{bg}}, {{bar_opacity}});
+  color: {{text}};
+  border-{{bar_edge}}: {{border_width}}px solid {{line}};
+  box-shadow: inset 0 0 {{glow_wide}}px alpha({{line}}, 0.25);
+}
+tooltip {
+  background: {{panel}}; border: {{border_width}}px solid {{title}}; border-radius: {{radius}}px;
+  box-shadow: 0 0 {{glow_px}}px alpha({{title}}, 0.6);
+}
+tooltip label { color: {{title}}; font-family: "{{font_mono}}", monospace; font-weight: normal; }
+
+.module { margin: 2px 1px; color: {{text}}; letter-spacing: 1px; }
+#hardware, #prefs { margin: 0 5px; }
+#tray { margin: 0 8px; }
+
+#custom-menu {
+  margin-left: 4px;
+  color: {{bg}};
+  letter-spacing: 3px;
+  {{frame_menu_title_fill}}
+}
+#custom-menu:hover { {{frame_menu_warn_fill}} }
+#custom-title {
+  margin-left: 6px;
+  color: {{line}};
+  text-shadow: 0 0 {{glow_px}}px alpha({{line}}, 0.9), 0 0 {{glow_wide}}px alpha({{line}}, 0.5);
+}
+
+/* System preferences: click to change. */
+#network, #bluetooth, #backlight, #wireplumber, #battery,
+#custom-alerts, #custom-theme, #custom-display, #custom-prefs, #custom-power {
+  color: {{line}};
+  text-shadow: 0 0 {{glow_px}}px alpha({{line}}, 0.8);
+  {{frame_prefs_line}}
+}
+#network:hover, #bluetooth:hover, #backlight:hover, #wireplumber:hover, #battery:hover,
+#custom-alerts:hover, #custom-theme:hover, #custom-display:hover, #custom-prefs:hover,
+#custom-power:hover {
+  color: {{bg}};
+  text-shadow: none;
+  {{frame_prefs_line_fill}}
+}
+#network.disconnected, #wireplumber.muted, #bluetooth.off, #bluetooth.disabled, #custom-alerts.off {
+  color: {{muted}};
+  text-shadow: none;
+  {{frame_prefs_muted}}
+}
+#battery.warning { color: {{warn}}; {{frame_prefs_warn}} }
+#battery.critical { color: {{bg}}; text-shadow: none; {{frame_prefs_alert_fill}} }
+
+/* Hardware read-outs. */
+#cpu, #memory, #disk, #temperature, #network.speed {
+  color: {{cyan}};
+  font-family: "{{font_mono}}", monospace;
+  font-size: {{font_size}}pt;
+  text-shadow: 0 0 {{glow_px}}px alpha({{cyan}}, 0.8);
+  {{frame_hardware_cyan}}
+}
+#temperature.critical { color: {{bg}}; text-shadow: none; {{frame_hardware_alert_fill}} }
+
+#clock {
+  margin-right: 4px;
+  color: {{title}};
+  font-family: "{{font_mono}}", monospace;
+  text-shadow: 0 0 {{glow_px}}px alpha({{title}}, 0.9), 0 0 {{glow_wide}}px alpha({{title}}, 0.5);
+  {{frame_clock_title}}
+}
